@@ -148,7 +148,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       <section><h2>과목별 시간</h2><table id="totals"></table></section>
       <section><h2>내려받기</h2><div class="dl">
         <button class="btn" id="btnElec">① 전자시간표 (HRD 업로드용)<small>샘플과 같은 서식</small></button>
-        <button class="btn" id="btnPrint">② 출력용시간표<small>한 장에 한 주, A4 세로</small></button>
+        <button class="btn" id="btnPrint">② 출력용시간표<small>한 장에 한 주(월~금), A4 세로</small></button>
         <button class="btn" id="btnEval">③ 평가일정 (평가날출력-4번)<small>성적 파일 B~W열에 값 붙여넣기</small></button>
         <button class="btn ghost" id="btnJson">편성 저장 (.json)<small>나중에 불러와서 이어서 수정</small></button>
       </div></section>
@@ -431,6 +431,10 @@ const extraPeriods = () => { const ps = S.settings.periods; if (S.settings.extra
 const isSlot = (d, p) => S.settings.weekdays.includes(d.getDay()) && !S.holidays[dkey(d)] && (S.settings.periods.includes(p) || extraPeriods().includes(p));
 const usedPeriods = () => { const set = new Set(S.settings.periods); Object.keys(S.lessons).forEach(k => set.add(+k.split('|')[1])); return [...set].sort((a, b) => a - b); };
 const outDays = () => S.days.filter(d => d <= S.endDate);
+// 출력용: 개강 주 월요일 ~ 수료 주 금요일의 모든 월~금
+const weekDays = () => { const s0 = parseD(S.settings.start), out = []; let d = addD(s0, -((s0.getDay() + 6) % 7)); const e = addD(S.endDate, 5 - S.endDate.getDay());
+  for (; d <= e; d = addD(d, 1)) if (d.getDay() >= 1 && d.getDay() <= 5) out.push(new Date(d)); return out; };
+const teacherNames = () => [...new Set(S.subjects.map(s => s.teacher).filter(Boolean))];
 function recalcEnd() { const ks = Object.keys(S.lessons).map(k => k.split('|')[0]).sort(); if (ks.length) S.endDate = parseD(ks[ks.length - 1]); }
 
 function renderPreview() {
@@ -573,13 +577,14 @@ async function dlPrint() {
   const rowXml = r => sh.match(new RegExp(`<row r="${r}"[^>]*>[\\s\\S]*?</row>`))[0];
   let top = [1, 2, 3, 4, 5].map(rowXml).join('');
   top = top.replace(/(<c r="A1"[^>]*><is><t>)[\s\S]*?(<\/t>)/, `$1${esc(S.plan.name)} 연간훈련 세부계획표$2`)
-    .replace(/(<c r="B2"[^>]*><is><t>)[\s\S]*?(<\/t>)/, `$1훈련기간 : ${dkey(S.days[0]).replace(/-/g, '.')} ~ ${dkey(S.endDate).replace(/-/g, '.')}$2`);
+    .replace(/(<c r="B2"[^>]*><is><t>)[\s\S]*?(<\/t>)/, `$1훈련기간 : ${dkey(S.days[0]).replace(/-/g, '.')} ~ ${dkey(S.endDate).replace(/-/g, '.')}$2`)
+    .replace(/<c r="H2"( s="\d+")?[^>]*?(?:\/>|>[\s\S]*?<\/c>)/, m => cStr('H2', (m.match(/ s="(\d+)"/) || [])[1], `담당교사 : ${teacherNames().join(', ')}`));
   const tplRow = i => { const x = rowXml(6 + i); const st = {}; [...x.matchAll(/<c r="([A-Z]+)\d+" s="(\d+)"/g)].forEach(m => st[m[1]] = m[2]); return { ht: (x.match(/ht="([\d.]+)"/) || [])[1] || '27.95', st }; };
   const tpl = [...Array(9)].map((_, i) => tplRow(i));         // 틀은 4교시 뒤 점심형: 4번째(0부터)가 점심
   const styleFor = (pos, isLunch) => isLunch ? tpl[4] : (pos === 4 && S.settings.lunchAfter === 3 ? tpl[2] : tpl[pos]);
   const rc = $('#room').value, rshort = roomShort(rc);
   let r = 6, cum = 0, out = '', merges = [], breaks = [];
-  const OD = outDays();
+  const OD = weekDays();
   OD.forEach((d, di) => {
     const k = dkey(d), hol = S.holidays[k];
     const dayTot = usedPeriods().filter(p => S.lessons[k + '|' + p] !== undefined).length;
