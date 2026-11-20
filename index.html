@@ -49,6 +49,8 @@ table.week th.hol{background:#fde2e1;color:var(--warn)}
 td.pc{background:#f7f8fa;font-weight:600}td.pc small{font-weight:400;color:var(--sub)}
 td.off{background:repeating-linear-gradient(45deg,#fafafa,#fafafa 5px,#f0f0f0 5px,#f0f0f0 10px)}
 td.slot{cursor:grab}td.slot.empty{background:#fff;cursor:default}
+td.slot.extra{background:repeating-linear-gradient(135deg,#fff,#fff 6px,#eef3ff 6px,#eef3ff 12px)}
+tr.extrarow td.pc{background:#eef3ff}td.pc em{font-style:normal;font-size:10.5px;color:var(--acc);border:1px solid var(--acc);border-radius:3px;padding:0 3px}
 td.slot.over{outline:3px solid var(--acc);outline-offset:-3px}td.slot.dragging{opacity:.45}
 tr.lunchrow td{background:#fbf6e9;height:24px;font-size:11px;color:#8a6d1f}
 td small{color:#445}
@@ -107,7 +109,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   <div class="drops">
     <div class="dz" id="dzPlan"><b>운영계획서 (.xls / .xlsx)</b><span id="planName">여기에 끌어 놓거나 눌러서 고르세요</span></div>
     <div class="dz" id="dzCodes"><b>코드표 (.xlsx)</b><span id="codeName">여기에 끌어 놓거나 눌러서 고르세요</span></div>
-    <div class="dz" id="dzLoad" onclick="document.getElementById('btnLoad').click()"><b>저장한 편성 불러오기</b><span>편성저장_….json</span></div>
+    <div class="dz" id="dzLoad" onclick="document.getElementById('btnLoad').click()"><b>이어서 수정하기</b><span>④ '편성 저장'으로 받은 .json 파일<br>(처음 편성할 때는 필요 없어요)</span></div>
   </div>
   <input type="file" id="fPlan" accept=".xls,.xlsx" hidden><input type="file" id="fCodes" accept=".xlsx,.xls" hidden><input type="file" id="fJson" accept=".json" hidden><button id="btnLoad" hidden></button>
 </section>
@@ -126,6 +128,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     <div><label class="f">수업 교시</label><div class="chks">
       <label><input type="checkbox" class="pchk" value="1">1</label><label><input type="checkbox" class="pchk" value="2" checked>2</label><label><input type="checkbox" class="pchk" value="3" checked>3</label><label><input type="checkbox" class="pchk" value="4" checked>4</label>
       <label><input type="checkbox" class="pchk" value="5">5</label><label><input type="checkbox" class="pchk" value="6">6</label><label><input type="checkbox" class="pchk" value="7">7</label><label><input type="checkbox" class="pchk" value="8">8</label></div></div>
+    <div><label class="f">여유 칸</label><label><input type="checkbox" id="extra" checked> 체크한 교시의 앞뒤 1교시를 여유 칸으로 보이기<br><small style="color:var(--sub)">자동 편성은 비워 두고, 자투리 시간을 드래그로 옮길 때 씁니다</small></label></div>
     <div><label class="f">수업 요일</label><div class="chks">
       <label><input type="checkbox" class="wchk" value="1" checked>월</label><label><input type="checkbox" class="wchk" value="2" checked>화</label><label><input type="checkbox" class="wchk" value="3" checked>수</label><label><input type="checkbox" class="wchk" value="4" checked>목</label><label><input type="checkbox" class="wchk" value="5" checked>금</label></div></div>
     <div><label class="f">평가일정용 과정번호 · 과정구분</label><div style="display:flex;gap:6px"><input type="text" id="courseNo" placeholder="과정번호" style="width:40%"><input type="text" id="courseType" value="일반" style="width:60%"></div></div>
@@ -380,7 +383,7 @@ function settings() {
     start: $('#start').value, lunchAfter: +$('#lunch').value,
     periods: $$('.pchk').filter(e => e.checked).map(e => +e.value).sort((a, b) => a - b),
     weekdays: $$('.wchk').filter(e => e.checked).map(e => +e.value),
-    mode: $('#mode').value, spill: $('#spill').checked
+    mode: $('#mode').value, spill: $('#spill').checked, extra: $('#extra').checked
   };
 }
 function generate() {
@@ -410,20 +413,25 @@ function generate() {
     d = addD(d, 1);
   }
   if (left()) return msg('편성 기간이 너무 깁니다. 교시·요일 설정을 확인해 주세요.');
-  S.lessons = lessons; S.endDate = last; S.settings = st;
+  S.lessons = lessons; S.endDate = last; S.rangeEnd = last; S.settings = st;
   buildDays(); refreshAll(true);
 }
 function buildDays() {
   const st = S.settings; S.days = [];
-  for (let d = parseD(st.start); d <= S.endDate; d = addD(d, 1)) if (d.getDay() >= 1 && d.getDay() <= 5) S.days.push(new Date(d));
+  for (let d = parseD(st.start); d <= (S.rangeEnd || S.endDate); d = addD(d, 1)) if (d.getDay() >= 1 && d.getDay() <= 5) S.days.push(new Date(d));
 }
 function refreshAll(scroll) {
   if (!S.settings) return;
+  recalcEnd();
   renderPreview(); renderTotals(); renderEval();
   $('#result').hidden = false;
   if (scroll) $('#result').scrollIntoView({ behavior: 'smooth' });
 }
-const isSlot = (d, p) => S.settings.weekdays.includes(d.getDay()) && !S.holidays[dkey(d)] && S.settings.periods.includes(p);
+const extraPeriods = () => { const ps = S.settings.periods; if (S.settings.extra === false || !ps.length) return []; return [ps[0] - 1, ps[ps.length - 1] + 1].filter(p => p >= 1 && p <= 8 && !ps.includes(p)); };
+const isSlot = (d, p) => S.settings.weekdays.includes(d.getDay()) && !S.holidays[dkey(d)] && (S.settings.periods.includes(p) || extraPeriods().includes(p));
+const usedPeriods = () => { const set = new Set(S.settings.periods); Object.keys(S.lessons).forEach(k => set.add(+k.split('|')[1])); return [...set].sort((a, b) => a - b); };
+const outDays = () => S.days.filter(d => d <= S.endDate);
+function recalcEnd() { const ks = Object.keys(S.lessons).map(k => k.split('|')[0]).sort(); if (ks.length) S.endDate = parseD(ks[ks.length - 1]); }
 
 function renderPreview() {
   const T = periodTable(S.settings.lunchAfter);
@@ -431,16 +439,17 @@ function renderPreview() {
   S.days.forEach(d => { if (cur.length && d.getDay() === 1) { weeks.push(cur); cur = []; } cur.push(d); });
   if (cur.length) weeks.push(cur);
   const sDate = S.days[0], eDate = S.endDate;
-  $('#summary').innerHTML = `훈련기간 <b>${dkey(sDate)} ~ ${dkey(eDate)}</b> · 수업일 <b>${new Set(Object.keys(S.lessons).map(k => k.split('|')[0])).size}일</b> · 편성 <b>${Object.keys(S.lessons).length}시간</b>`;
+  $('#summary').innerHTML = `훈련기간 <b>${dkey(sDate)} ~ ${dkey(eDate)}</b>${S.rangeEnd && S.endDate < S.rangeEnd ? ' <span class="bad">(옮긴 칸 때문에 수료일이 앞당겨짐)</span>' : ''} · 수업일 <b>${new Set(Object.keys(S.lessons).map(k => k.split('|')[0])).size}일</b> · 편성 <b>${Object.keys(S.lessons).length}시간</b>`;
   $('#preview').innerHTML = weeks.map((w, wi) => {
     const head = w.map(d => `<th class="${S.holidays[dkey(d)] ? 'hol' : ''}">${d.getMonth() + 1}/${d.getDate()}(${WD[d.getDay()]})${S.holidays[dkey(d)] ? '<br><small>' + esc(S.holidays[dkey(d)]) + '</small>' : ''}</th>`).join('');
-    const ps = S.settings.periods, showLunch = ps[0] <= T.lunchAfter && ps[ps.length - 1] > T.lunchAfter;
+    const ps = [...new Set([...usedPeriods(), ...extraPeriods()])].sort((a, b) => a - b), showLunch = ps[0] <= T.lunchAfter && ps[ps.length - 1] > T.lunchAfter;
+    const ex = extraPeriods();
     const body = T.rows.filter(r => r.p === '점심' ? showLunch : ps.includes(r.p)).map(r => {
       if (r.p === '점심') return `<tr class="lunchrow"><td class="pc">점심<br><small>${r.disp}</small></td>${w.map(() => '<td></td>').join('')}</tr>`;
-      return `<tr><td class="pc">${r.p}교시<br><small>${r.disp}</small></td>${w.map(d => {
+      return `<tr class="${ex.includes(r.p) ? 'extrarow' : ''}"><td class="pc">${r.p}교시${ex.includes(r.p) ? ' <em>여유</em>' : ''}<br><small>${r.disp}</small></td>${w.map(d => {
         const k = dkey(d) + '|' + r.p, v = S.lessons[k];
         if (!isSlot(d, r.p)) return `<td class="off"></td>`;
-        if (v === undefined) return `<td class="slot empty" data-k="${k}"></td>`;
+        if (v === undefined) return `<td class="slot empty${ex.includes(r.p) ? ' extra' : ''}" data-k="${k}"></td>`;
         const s = S.subjects[v];
         return `<td class="slot" data-k="${k}" draggable="true" style="background:${s.color}" title="${esc(s.name)} / ${esc(s.teacher)}">${esc(s.name)}<br><small>${esc(s.teacher)}</small></td>`;
       }).join('')}</tr>`;
@@ -532,8 +541,8 @@ async function dlElec() {
   const sid = v => { v = String(v); if (!idx.has(v)) { idx.set(v, table.length); table.push(v); } return idx.get(v); };
   const T = periodTable(S.settings.lunchAfter), rc = roomCode($('#room').value);
   const rows = [];
-  S.days.forEach(d => {
-    const ps = S.settings.periods.filter(p => S.lessons[dkey(d) + '|' + p] !== undefined);
+  outDays().forEach(d => {
+    const ps = usedPeriods().filter(p => S.lessons[dkey(d) + '|' + p] !== undefined);
     if (!ps.length) return;
     const st = T.byP[ps[0]].s, en = hhmm(T.byP[ps[ps.length - 1]].s, 60);
     const items = ps.map(p => ({ t: T.byP[p].s, p }));
@@ -570,9 +579,10 @@ async function dlPrint() {
   const styleFor = (pos, isLunch) => isLunch ? tpl[4] : (pos === 4 && S.settings.lunchAfter === 3 ? tpl[2] : tpl[pos]);
   const rc = $('#room').value, rshort = roomShort(rc);
   let r = 6, cum = 0, out = '', merges = [], breaks = [];
-  S.days.forEach((d, di) => {
+  const OD = outDays();
+  OD.forEach((d, di) => {
     const k = dkey(d), hol = S.holidays[k];
-    const dayTot = S.settings.periods.filter(p => S.lessons[k + '|' + p] !== undefined).length;
+    const dayTot = usedPeriods().filter(p => S.lessons[k + '|' + p] !== undefined).length;
     cum += dayTot;
     T.rows.forEach((pr, pos) => {
       const isL = pr.p === '점심', sty = styleFor(pos, isL).st, rr = r + pos;
@@ -596,7 +606,7 @@ async function dlPrint() {
     });
     ['B', 'C', 'L', 'M'].forEach(cl => merges.push(`${cl}${r}:${cl}${r + 8}`));
     r += 9;
-    if (d.getDay() === 5 && di < S.days.length - 1) breaks.push(r - 1);
+    if (d.getDay() === 5 && di < OD.length - 1) breaks.push(r - 1);
   });
   const last = r - 1;
   const headMerges = [...sh.matchAll(/<mergeCell ref="([A-Z]+)(\d+):([A-Z]+)(\d+)"\/>/g)].filter(m => +m[4] <= 5).map(m => m[0]);
@@ -644,7 +654,7 @@ async function dlEval() {
 /* ---------- 저장 / 불러오기 ---------- */
 function saveJson() {
   if (!needResult()) return;
-  const data = { version: 1, plan: S.plan, codes: S.codes, subjects: S.subjects, settings: S.settings, holidays: $('#holidays').value, lessons: S.lessons, room: $('#room').value, courseNo: $('#courseNo').value, courseType: $('#courseType').value };
+  const data = { version: 1, plan: S.plan, codes: S.codes, subjects: S.subjects, settings: S.settings, holidays: $('#holidays').value, lessons: S.lessons, rangeEnd: dkey(S.rangeEnd || S.endDate), room: $('#room').value, courseNo: $('#courseNo').value, courseType: $('#courseType').value };
   saveBlob(new Blob([JSON.stringify(data)], { type: 'application/json' }), `편성저장_${courseTag()}.json`);
 }
 async function loadJson(file) {
@@ -655,7 +665,7 @@ async function loadJson(file) {
   $$('.pchk').forEach(e => e.checked = st.periods.includes(+e.value)); $$('.wchk').forEach(e => e.checked = st.weekdays.includes(+e.value));
   $('#holidays').value = d.holidays; $('#room').value = d.room; $('#courseNo').value = d.courseNo || ''; $('#courseType').value = d.courseType || '일반';
   S.holidays = readHolidays(); S.settings = st; S.lessons = d.lessons;
-  const ks = Object.keys(S.lessons).map(k => k.split('|')[0]).sort(); S.endDate = parseD(ks[ks.length - 1]);
+  const ks = Object.keys(S.lessons).map(k => k.split('|')[0]).sort(); S.endDate = parseD(ks[ks.length - 1]); S.rangeEnd = d.rangeEnd ? parseD(d.rangeEnd) : S.endDate; $('#extra').checked = st.extra !== false;
   buildDays(); toggleMode(); refreshAll(true); msg('저장한 편성을 불러왔습니다.');
 }
 
