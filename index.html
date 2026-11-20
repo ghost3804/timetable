@@ -48,6 +48,12 @@ table.week th{text-align:center}
 table.week th.hol{background:#fde2e1;color:var(--warn)}
 td.pc{background:#f7f8fa;font-weight:600}td.pc small{font-weight:400;color:var(--sub)}
 td.off{background:repeating-linear-gradient(45deg,#fafafa,#fafafa 5px,#f0f0f0 5px,#f0f0f0 10px)}
+td.tcell{min-width:190px}.trow{display:flex;gap:4px;align-items:center;margin-bottom:3px;font-size:12px}.trow select{flex:1;min-width:80px}.trow input.tH{width:46px}
+.tDel,.tAdd{border:1px solid #c8d0dc;background:#fff;border-radius:4px;cursor:pointer;font-size:11.5px;padding:1px 6px}.tAdd{color:var(--acc)}.tDel{color:#c0392b}
+.tfoot{display:flex;gap:8px;align-items:center}.tsum{font-size:11.5px}.tsum.ok{color:#2e7d32}.tsum.bad{color:#c0392b;font-weight:bold}
+tr.sub td{font-size:11.5px;color:#555;padding-top:1px;padding-bottom:1px}tr.sub td:first-child{padding-left:22px}
+small.tm{font-weight:bold}small.tm.t1{color:#b3261e}small.tm.t2{color:#1d5fbf}select.cellSel{font-size:11px;max-width:100%}
+#totals th,#tTotals th,#tTotals td:first-child,tr.sub td:first-child{white-space:nowrap}#tTotals td:nth-child(2){font-size:11.5px}
 td.slot{cursor:grab}td.slot.empty{background:#fff;cursor:default}
 td.slot.extra{background:repeating-linear-gradient(135deg,#fff,#fff 6px,#eef3ff 6px,#eef3ff 12px)}
 tr.extrarow td.pc{background:#eef3ff}td.pc em{font-style:normal;font-size:10.5px;color:var(--acc);border:1px solid var(--acc);border-radius:3px;padding:0 3px}
@@ -143,9 +149,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   <h2><span class="step">3</span>미리보기 · 수정 · 내려받기</h2>
   <div id="summary"></div>
   <div class="layout">
-    <div><p class="hint" style="margin:0 0 8px">칸을 끌어서 다른 칸에 놓으면 두 칸이 서로 바뀝니다(빈 칸으로도 옮길 수 있어요). 과목별 총시간은 그대로 유지됩니다.</p><div id="preview"></div></div>
+    <div><p class="hint" style="margin:0 0 8px">칸을 끌어서 다른 칸에 놓으면 두 칸이 서로 바뀝니다(빈 칸으로도 옮길 수 있어요). 과목별 총시간은 그대로 유지됩니다. 칸을 <b>두 번 클릭</b>하면 그 칸의 교사만 바꿀 수 있어요.</p><div id="preview"></div></div>
     <div class="side">
       <section><h2>과목별 시간</h2><table id="totals"></table></section>
+      <section><h2>교사별 시간</h2><table id="tTotals"></table></section>
       <section><h2>내려받기</h2><div class="dl">
         <button class="btn" id="btnElec">① 전자시간표 (HRD 업로드용)<small>샘플과 같은 서식</small></button>
         <button class="btn" id="btnPrint">② 출력용시간표<small>한 장에 한 주(월~금), 수업 없는 날 회색, 아래쪽에 주차 표시</small></button>
@@ -154,7 +161,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       </div></section>
     </div>
   </div>
-  <section style="margin-top:14px"><h2>평가 예정일 (능력단위별)</h2><table class="evt"><thead><tr><th>능력단위</th><th>시간</th><th>사전계획(첫 수업일)</th><th>본평가</th><th>2차</th><th>3차</th></tr></thead><tbody id="evalBody"></tbody></table>
+  <section style="margin-top:14px"><h2>평가 예정일 (능력단위별)</h2><table class="evt"><thead><tr><th>능력단위</th><th>평가 교사</th><th>시간</th><th>사전계획(첫 수업일)</th><th>본평가</th><th>2차</th><th>3차</th></tr></thead><tbody id="evalBody"></tbody></table>
     <p class="hint">본평가 = 편성시간 80% 시점이 들어 있는 날 · 2차·3차 = 앞 평가 +7일(수업 없는 날이면 다음 수업일, 수료일을 넘으면 다음 수업일로 당김). 노란 칸은 같은 날 평가가 겹친 경우입니다. 운영계획서에 평가방법이 비어 있는 과목(예: 재량교과)은 평가일정에서 뺍니다.</p></section>
 </section>
 <div id="msg" hidden></div>
@@ -225,7 +232,7 @@ function periodTable(lunchAfter) {
 }
 
 /* ---------- 상태 ---------- */
-const S = { plan: null, codes: null, subjects: [], lessons: {}, days: [], endDate: null, holidays: {}, files: {} };
+const S = { plan: null, codes: null, subjects: [], lessons: {}, lt: {}, days: [], endDate: null, holidays: {}, files: {} };
 
 /* ---------- 파일 읽기 ---------- */
 async function readRows(file) {
@@ -344,6 +351,7 @@ function buildSubjects() {
   S.subjects = p.subjects.map((s, i) => ({
     ...s, idx: i,
     teacher: s.teachers[0] || p.teachers[0] || '',
+    tsplit: [{ t: s.teachers[0] || p.teachers[0] || '', h: s.hours }],
     code: cd.subjects[norm(s.name)] || '',
     method: (k => k === undefined ? '평가자 체크리스트' : p.methods[k])([norm(s.unit), norm(s.name)].find(k => k in p.methods)),
     half: i < Math.ceil(p.subjects.length / 2) ? 'am' : 'pm', color: COLORS[i % COLORS.length]
@@ -353,6 +361,26 @@ const COLORS = ['#cfe2ff', '#ffe0c2', '#d4f0d4', '#f5d0e6', '#fff1b8', '#d9d2f5'
 const roomCode = name => { const r = (S.codes?.rooms || []).find(x => x.name.startsWith(name) || name.startsWith(x.name)); return r ? r.code : ''; };
 const roomShort = name => String(name || '').replace(/_DS.*$/, '').replace(/\(.*$/, '').trim();
 const teacherCode = n => (S.codes?.teachers || {})[n] || '';
+/* ---------- 한 과목을 여러 교사(최대 3명)가 나눠 맡기 ---------- */
+const MAX_T = 3;
+const splitOf = s => (s.tsplit && s.tsplit.length ? s.tsplit : [{ t: s.teacher, h: s.hours }]);
+const lessonT = k => (S.lt && S.lt[k]) || (S.subjects[S.lessons[k]] || {}).teacher || '';
+const evenSplit = (H, n) => [...Array(n)].map((_, j) => Math.floor(H / n) + (j < H % n ? 1 : 0));
+const lessonKeysSorted = () => Object.keys(S.lessons).sort((a, b) => a.split('|')[0] === b.split('|')[0] ? +a.split('|')[1] - +b.split('|')[1] : a < b ? -1 : 1);
+// 과목의 편성 칸을 날짜·교시 순으로 훑으며 1번 교사 시간 → 2번 교사 시간 → 3번 교사 시간 순으로 배정
+function assignTeachers(only) {
+  S.lt = S.lt || {};
+  const keys = lessonKeysSorted();
+  S.subjects.forEach(s => {
+    if (only !== undefined && s.idx !== only) return;
+    const sp = splitOf(s); let j = 0, used = 0;
+    keys.filter(k => S.lessons[k] === s.idx).forEach(k => {
+      while (j < sp.length - 1 && used >= (+sp[j].h || 0)) { j++; used = 0; }
+      S.lt[k] = sp[j].t; used++;
+    });
+  });
+}
+function syncTeacher(s) { s.tsplit = splitOf(s); s.teacher = s.tsplit[0].t; }
 
 function renderSetup() {
   const p = S.plan;
@@ -362,19 +390,53 @@ function renderSetup() {
   $('#subjBody').innerHTML = S.subjects.map((s, i) => `<tr>
     <td><span class="sw" style="background:${s.color}"></span>${i + 1}</td><td>${esc(s.kind)}</td><td>${esc(s.name)}</td>
     <td>${esc(s.ncs ? s.unit : '')}</td><td class="num">${s.hours}</td>
-    <td><select data-i="${i}" class="tSel">${tsel(s.teacher)}</select></td>
+    <td class="tcell">${teacherCell(s, i, tsel)}</td>
     <td class="split-only"><select data-i="${i}" class="hSel"><option value="am" ${s.half === 'am' ? 'selected' : ''}>오전</option><option value="pm" ${s.half === 'pm' ? 'selected' : ''}>오후</option></select></td>
     <td class="code ${s.code ? '' : 'miss'}">${s.code ? esc(s.code) : '코드 없음'}</td></tr>`).join('');
-  $$('.tSel').forEach(e => e.onchange = () => { S.subjects[+e.dataset.i].teacher = e.value; refreshAll(false); });
+  bindTeacherCells(tlist);
   $$('.hSel').forEach(e => e.onchange = () => { S.subjects[+e.dataset.i].half = e.value; });
+  const rv = $('#room').value;
   $('#room').innerHTML = (p.rooms.length ? p.rooms : ['']).map(r => `<option>${esc(r)}</option>`).join('');
+  if (rv && p.rooms.includes(rv)) $('#room').value = rv;
   $('#setup').hidden = false;
   checkCodes();
+}
+function teacherCell(s, i, tsel) {
+  const sp = splitOf(s), H = s.hours, sum = sp.reduce((a, x) => a + (+x.h || 0), 0);
+  const rows = sp.map((x, j) => `<div class="trow"><select data-i="${i}" data-j="${j}" class="tSel">${tsel(x.t)}</select>${sp.length > 1
+    ? `<input type="number" min="0" max="${H}" value="${x.h}" data-i="${i}" data-j="${j}" class="tH">시간<button type="button" class="tDel" data-i="${i}" data-j="${j}" title="이 교사 빼기">×</button>` : ''}</div>`).join('');
+  const add = sp.length < MAX_T ? `<button type="button" class="tAdd" data-i="${i}">${sp.length === 1 ? '+ 교사 나누기' : '+ 교사 추가'}</button>` : '';
+  const chk = sp.length > 1 ? `<span class="tsum ${sum === H ? 'ok' : 'bad'}">합계 ${sum}/${H}시간</span>` : '';
+  return rows + `<div class="tfoot">${add}${chk}</div>`;
+}
+function bindTeacherCells(tlist) {
+  const changed = i => { const s = S.subjects[i]; syncTeacher(s); renderSetup(); if (S.settings && Object.keys(S.lessons).length) { assignTeachers(i); refreshAll(false); } };
+  $$('.tSel').forEach(e => e.onchange = () => { const s = S.subjects[+e.dataset.i]; s.tsplit = splitOf(s).map(x => ({ ...x })); s.tsplit[+e.dataset.j].t = e.value; changed(+e.dataset.i); });
+  $$('.tH').forEach(e => e.onchange = () => {
+    const i = +e.dataset.i, j = +e.dataset.j, s = S.subjects[i], sp = splitOf(s).map(x => ({ ...x })), H = s.hours;
+    const v = Math.max(0, Math.min(H, Math.round(+e.value || 0))); sp[j].h = v;
+    // 합계가 총시간이 되도록 다음 교사 시간을 맞춤 (안 되면 합계를 빨간색으로 표시)
+    const o = (j + 1) % sp.length, rest = H - sp.reduce((a, x, q) => q === o ? a : a + (+x.h || 0), 0);
+    if (rest >= 0) sp[o].h = rest;
+    s.tsplit = sp; changed(i);
+  });
+  $$('.tDel').forEach(e => e.onclick = () => {
+    const i = +e.dataset.i, s = S.subjects[i], sp = splitOf(s).filter((_, j) => j !== +e.dataset.j);
+    const hs = evenSplit(s.hours, sp.length); s.tsplit = sp.map((x, j) => ({ t: x.t, h: hs[j] })); changed(i);
+  });
+  $$('.tAdd').forEach(e => e.onclick = () => {
+    const i = +e.dataset.i, s = S.subjects[i], sp = splitOf(s).map(x => ({ ...x }));
+    const have = new Set(sp.map(x => x.t));
+    // 운영계획서에 그 과목 교사로 적힌 사람을 먼저, 없으면 전체 교사 목록에서
+    const next = [...(s.teachers || []), ...tlist].find(t => t && !have.has(t)) || sp[0].t;
+    sp.push({ t: next, h: 0 });
+    const hs = evenSplit(s.hours, sp.length); s.tsplit = sp.map((x, j) => ({ t: x.t, h: hs[j] })); changed(i);
+  });
 }
 function checkCodes() {
   const miss = [];
   if (!S.codes) { $('#codeWarn').textContent = '코드표를 넣으면 강사·시설·교과목 코드가 자동으로 붙습니다.'; return; }
-  S.subjects.forEach(s => { if (!s.code) miss.push(`교과목 '${s.name}'`); if (!teacherCode(s.teacher)) miss.push(`교사 '${s.teacher}'`); });
+  S.subjects.forEach(s => { if (!s.code) miss.push(`교과목 '${s.name}'`); splitOf(s).forEach(x => { if (!teacherCode(x.t)) miss.push(`교사 '${x.t}'`); }); });
   if (!roomCode($('#room').value)) miss.push(`시설 '${$('#room').value}'`);
   $('#codeWarn').innerHTML = miss.length ? '⚠ 코드표에서 찾지 못한 항목: ' + [...new Set(miss)].map(esc).join(', ') : '✔ 모든 코드를 찾았습니다.';
 }
@@ -420,7 +482,8 @@ function generate() {
     d = addD(d, 1);
   }
   if (left()) return msg('편성 기간이 너무 깁니다. 교시·요일 설정을 확인해 주세요.');
-  S.lessons = lessons; S.endDate = last; S.rangeEnd = last; S.settings = st;
+  S.lessons = lessons; S.lt = {}; S.endDate = last; S.rangeEnd = last; S.settings = st;
+  assignTeachers();
   buildDays(); refreshAll(true);
 }
 function buildDays() {
@@ -441,7 +504,7 @@ const outDays = () => S.days.filter(d => d <= S.endDate);
 // 출력용: 개강 주 월요일 ~ 수료 주 금요일의 모든 월~금
 const weekDays = () => { const s0 = parseD(S.settings.start), out = []; let d = addD(s0, -((s0.getDay() + 6) % 7)); const e = addD(S.endDate, 5 - S.endDate.getDay());
   for (; d <= e; d = addD(d, 1)) if (d.getDay() >= 1 && d.getDay() <= 5) out.push(new Date(d)); return out; };
-const teacherNames = () => [...new Set(S.subjects.map(s => s.teacher).filter(Boolean))];
+const teacherNames = () => { const set = new Set(); lessonKeysSorted().forEach(k => { const t = lessonT(k); if (t) set.add(t); }); return [...set]; };
 function recalcEnd() { const ks = Object.keys(S.lessons).map(k => k.split('|')[0]).sort(); if (ks.length) S.endDate = parseD(ks[ks.length - 1]); }
 
 function renderPreview() {
@@ -462,7 +525,8 @@ function renderPreview() {
         if (!isSlot(d, r.p)) return `<td class="off"></td>`;
         if (v === undefined) return `<td class="slot empty${ex.includes(r.p) ? ' extra' : ''}" data-k="${k}"></td>`;
         const s = S.subjects[v];
-        return `<td class="slot" data-k="${k}" draggable="true" style="background:${s.color}" title="${esc(s.name)} / ${esc(s.teacher)}">${esc(s.name)}<br><small>${esc(s.teacher)}</small></td>`;
+        const t = lessonT(k), sp = splitOf(s), tj = sp.findIndex(x => x.t === t);
+        return `<td class="slot" data-k="${k}" draggable="true" style="background:${s.color}" title="${esc(s.name)} / ${esc(t)} (두 번 클릭하면 이 칸 교사 바꾸기)">${esc(s.name)}<br><small class="${sp.length > 1 ? 'tm t' + Math.max(0, tj) : ''}">${esc(t)}</small></td>`;
       }).join('')}</tr>`;
     }).join('');
     return `<table class="week"><caption>${wi + 1}주차</caption><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table>`;
@@ -479,19 +543,40 @@ function bindDrag() {
     td.addEventListener('drop', e => {
       e.preventDefault(); td.classList.remove('over');
       const k2 = td.dataset.k; if (!dragK || dragK === k2) return;
-      const a = S.lessons[dragK], b = S.lessons[k2];
+      const a = S.lessons[dragK], b = S.lessons[k2], ta = S.lt[dragK], tb = S.lt[k2];
       if (b === undefined) delete S.lessons[dragK]; else S.lessons[dragK] = b;
       if (a === undefined) delete S.lessons[k2]; else S.lessons[k2] = a;
+      if (tb === undefined) delete S.lt[dragK]; else S.lt[dragK] = tb;
+      if (ta === undefined) delete S.lt[k2]; else S.lt[k2] = ta;
       dragK = null; S.edited = true; refreshAll(false);
+    });
+    // 두 번 클릭: 이 칸만 교사 바꾸기 (그 과목 담당 교사 → 다른 교사 순)
+    td.addEventListener('dblclick', () => {
+      const k = td.dataset.k, v = S.lessons[k]; if (v === undefined) return;
+      const s = S.subjects[v], cur = lessonT(k);
+      const all = [...new Set([...splitOf(s).map(x => x.t), ...(S.plan?.teachers || []), ...Object.keys(S.codes?.teachers || {})])].filter(Boolean);
+      const sel = document.createElement('select'); sel.className = 'cellSel';
+      sel.innerHTML = all.map(t => `<option ${t === cur ? 'selected' : ''}>${esc(t)}</option>`).join('');
+      td.draggable = false; td.querySelector('small').replaceWith(sel); sel.focus();
+      const done = () => { if (sel.value !== cur) { S.lt[k] = sel.value; S.edited = true; } refreshAll(false); };
+      sel.onchange = done; sel.onblur = done;
     });
   });
 }
 function renderTotals() {
-  const cnt = {}; Object.values(S.lessons).forEach(v => cnt[v] = (cnt[v] || 0) + 1);
-  $('#totals').innerHTML = `<tr><th>교과목</th><th>계획</th><th>편성</th><th>과부족</th></tr>` + S.subjects.map(s => {
-    const n = cnt[s.idx] || 0, d = n - s.hours;
-    return `<tr><td><span class="sw" style="background:${s.color}"></span>${esc(s.name)}</td><td class="num">${s.hours}</td><td class="num">${n}</td><td class="num ${d ? 'bad' : ''}">${d > 0 ? '+' + d : d}</td></tr>`;
+  const cnt = {}, ct = {}, tt = {};
+  Object.keys(S.lessons).forEach(k => { const v = S.lessons[k], t = lessonT(k); cnt[v] = (cnt[v] || 0) + 1; ct[v + '|' + t] = (ct[v + '|' + t] || 0) + 1; tt[t] = (tt[t] || 0) + 1; });
+  const dd = d => `<td class="num ${d ? 'bad' : ''}">${d > 0 ? '+' + d : d}</td>`;
+  $('#totals').innerHTML = `<tr><th>교과목 / 교사</th><th>계획</th><th>편성</th><th>과부족</th></tr>` + S.subjects.map(s => {
+    const n = cnt[s.idx] || 0, sp = splitOf(s);
+    let h = `<tr><td><span class="sw" style="background:${s.color}"></span>${esc(s.name)}</td><td class="num">${s.hours}</td><td class="num">${n}</td>${dd(n - s.hours)}</tr>`;
+    const names = [...new Set([...(sp.length > 1 ? sp.map(x => x.t) : []), ...Object.keys(ct).filter(x => x.startsWith(s.idx + '|')).map(x => x.slice(String(s.idx).length + 1))])];
+    if (names.length > 1) h += names.map(t => { const plan = sp.length > 1 ? sp.filter(x => x.t === t).reduce((a, x) => a + (+x.h || 0), 0) : (t === sp[0].t ? s.hours : 0), m = ct[s.idx + '|' + t] || 0;
+      return `<tr class="sub"><td>└ ${esc(t)}</td><td class="num">${plan}</td><td class="num">${m}</td>${dd(m - plan)}</tr>`; }).join('');
+    return h;
   }).join('');
+  const tn = Object.keys(tt);
+  $('#tTotals').innerHTML = `<tr><th>교사</th><th>맡은 교과목</th><th>편성</th></tr>` + tn.map(t => `<tr><td>${esc(t)}</td><td>${S.subjects.filter(s => ct[s.idx + '|' + t]).map(s => `${esc(s.name)} ${ct[s.idx + '|' + t]}`).join(', ')}</td><td class="num">${tt[t]}</td></tr>`).join('');
 }
 
 /* ---------- 평가일정 ---------- */
@@ -515,14 +600,18 @@ function evalPlan() {
       e2 = nextDay(main); e3 = e2 && nextDay(e2);
       if (!e3) { main = days[Math.max(0, days.length - 3)]; e2 = days[Math.max(0, days.length - 2)]; e3 = days[days.length - 1]; }
     }
-    return { s, first, main, e2, e3, hours: hrs.length };
+    // 평가 교사 = 본평가일에 그 과목을 가르치는 교사 (그날 수업이 없으면 그 과목을 가장 많이 맡은 교사)
+    const sk = keys.filter(k => S.lessons[k] === s.idx), onMain = sk.filter(k => k.startsWith(main + '|'));
+    const most = Object.entries(sk.reduce((a, k) => (a[lessonT(k)] = (a[lessonT(k)] || 0) + 1, a), {})).sort((a, b) => b[1] - a[1])[0];
+    const teacher = onMain.length ? lessonT(onMain[onMain.length - 1]) : (most ? most[0] : s.teacher);
+    return { s, first, main, e2, e3, hours: hrs.length, teacher };
   }).filter(x => !x.none).sort((a, b) => a.main < b.main ? -1 : a.main > b.main ? 1 : a.s.idx - b.s.idx);
 }
 const fmtK = k => { const d = parseD(k); return `${d.getMonth() + 1}/${d.getDate()}(${WD[d.getDay()]})`; };
 function renderEval() {
   const ev = evalPlan();
   const clash = {}; ev.forEach(e => [e.main, e.e2, e.e3].forEach(k => clash[k] = (clash[k] || 0) + 1));
-  $('#evalBody').innerHTML = ev.map(e => `<tr><td>${esc(e.s.name)}</td><td class="num">${e.hours}</td><td>${fmtK(e.first)}</td>${[e.main, e.e2, e.e3].map(k => `<td class="${clash[k] > 1 ? 'warn' : ''}">${fmtK(k)}</td>`).join('')}</tr>`).join('');
+  $('#evalBody').innerHTML = ev.map(e => `<tr><td>${esc(e.s.name)}</td><td>${esc(e.teacher)}</td><td class="num">${e.hours}</td><td>${fmtK(e.first)}</td>${[e.main, e.e2, e.e3].map(k => `<td class="${clash[k] > 1 ? 'warn' : ''}">${fmtK(k)}</td>`).join('')}</tr>`).join('');
 }
 
 /* ---------- 내려받기 공통 ---------- */
@@ -565,7 +654,7 @@ async function dlElec() {
     items.sort((a, b) => a.t.localeCompare(b.t));
     items.forEach(it => {
       if (it.lunch) rows.push([ymd(d), st, en, 'N', it.t, '2', '', '', '']);
-      else { const s = S.subjects[S.lessons[dkey(d) + '|' + it.p]]; rows.push([ymd(d), st, en, 'N', it.t, '1', teacherCode(s.teacher), rc, s.code]); }
+      else { const s = S.subjects[S.lessons[dkey(d) + '|' + it.p]]; rows.push([ymd(d), st, en, 'N', it.t, '1', teacherCode(lessonT(dkey(d) + '|' + it.p)), rc, s.code]); }
     });
   });
   let n = 0;
@@ -632,7 +721,7 @@ async function dlPrint() {
       c += cStr('H' + rr, sty.H, s ? (s.ncs ? s.unit : s.name) : '');
       c += cStr('I' + rr, sty.I, s ? (s.ncs ? s.unit : (s.unitDetail || s.name)) : '');
       c += cStr('J' + rr, sty.J, s ? rshort : '');
-      c += cStr('K' + rr, sty.K, s ? s.teacher : '');
+      c += cStr('K' + rr, sty.K, s ? lessonT(k + '|' + pr.p) : '');
       c += pos === 0 ? cNum('L' + rr, sty.L, dayTot || '') : cNum('L' + rr, sty.L, '');
       c += pos === 0 ? cNum('M' + rr, sty.M, dayTot ? cum : '') : cNum('M' + rr, sty.M, '');
       out += `<row r="${rr}" ht="${styleFor(pos, isL).ht}" customHeight="1">${c}</row>`;
@@ -665,7 +754,7 @@ async function dlEval() {
   const rowXml = r => sh.match(new RegExp(`<row r="${r}"[^>]*>[\\s\\S]*?</row>`))[0];
   const st5 = {}; [...rowXml(5).matchAll(/<c r="([A-Z]+)5" s="(\d+)"/g)].forEach(m => st5[m[1]] = m[2]);
   const st3 = (rowXml(3).match(/s="(\d+)"/) || [])[1];
-  const y = S.days[0].getFullYear(), teachers = [...new Set(S.subjects.map(s => s.teacher))];
+  const y = S.days[0].getFullYear(), teachers = teacherNames();
   let r2 = rowXml(2).replace(/(<t>)[\s\S]*?(<\/t>)/, `$1${y}년   훈 련 실 시 계 획 서$2`);
   const r3 = `<row r="3">${cStr('B3', st3, '과정번호')}${cStr('D3', st3, $('#courseNo').value)}${cStr('E3', st3, $('#courseType').value)}${cStr('F3', st3, S.plan.name)}${cStr('J3', st3, `훈련기간 : ${dkey(S.days[0]).replace(/-/g, '.')} ~ ${dkey(S.endDate).replace(/-/g, '.')} `)}${cStr('O3', st3, teachers[0] || '')}${cStr('R3', st3, teachers[1] || '')}</row>`;
   const rs = roomShort($('#room').value);
@@ -675,7 +764,7 @@ async function dlEval() {
       ['B', 'n', i + 1], ['C', 'n', s.idx + 1], ['D', 's', s.code], ['E', 's', s.kind], ['F', 's', s.name],
       ['G', 's', norm(ncs ? s.unit : s.name)], ['H', 's', ncs ? `[${s.ncs}]` : `[${s.kind}]`], ['I', 's', ncs ? s.unit : s.name],
       ['J', 's', ncs && s.level ? `${s.level}수준` : '1수준'], ['K', 's', s.method], ['L', 's', ''], ['M', 'n', 0], ['N', 's', ''], ['O', 'n', 0],
-      ['P', 'n', parseD(e.main).getMonth() + 1], ['Q', 'n', e.hours], ['R', 's', rs], ['S', 's', s.teacher],
+      ['P', 'n', parseD(e.main).getMonth() + 1], ['Q', 'n', e.hours], ['R', 's', rs], ['S', 's', e.teacher],
       ['T', 'n', serial(parseD(e.first))], ['U', 'n', serial(parseD(e.main))], ['V', 'n', serial(parseD(e.e2))], ['W', 'n', serial(parseD(e.e3))]];
     return `<row r="${r}">` + vals.map(([c, t, v]) => t === 'n' ? cNum(c + r, st5[c], v) : cStr(c + r, st5[c], v)).join('') + '</row>';
   }).join('');
@@ -688,7 +777,7 @@ async function dlEval() {
 /* ---------- 저장 / 불러오기 ---------- */
 function saveJson() {
   if (!needResult()) return;
-  const data = { version: 1, plan: S.plan, codes: S.codes, subjects: S.subjects, settings: S.settings, holidays: $('#holidays').value, lessons: S.lessons, rangeEnd: dkey(S.rangeEnd || S.endDate), room: $('#room').value, courseNo: $('#courseNo').value, courseType: $('#courseType').value };
+  const data = { version: 1, plan: S.plan, codes: S.codes, subjects: S.subjects, settings: S.settings, holidays: $('#holidays').value, lessons: S.lessons, lt: S.lt, rangeEnd: dkey(S.rangeEnd || S.endDate), room: $('#room').value, courseNo: $('#courseNo').value, courseType: $('#courseType').value };
   saveBlob(new Blob([JSON.stringify(data)], { type: 'application/json' }), `편성저장_${courseTag()}.json`);
 }
 async function loadJson(file) {
@@ -698,7 +787,8 @@ async function loadJson(file) {
   $('#start').value = st.start; $('#lunch').value = st.lunchAfter; $('#mode').value = st.mode; $('#spill').checked = st.spill;
   $$('.pchk').forEach(e => e.checked = st.periods.includes(+e.value)); $$('.wchk').forEach(e => e.checked = st.weekdays.includes(+e.value));
   $('#holidays').value = d.holidays; $('#room').value = d.room; $('#courseNo').value = d.courseNo || ''; $('#courseType').value = d.courseType || '일반';
-  S.holidays = readHolidays(); S.settings = st; S.lessons = d.lessons;
+  S.holidays = readHolidays(); S.settings = st; S.lessons = d.lessons; S.lt = d.lt || {};
+  S.subjects.forEach(syncTeacher); if (!d.lt) assignTeachers();
   const ks = Object.keys(S.lessons).map(k => k.split('|')[0]).sort(); S.endDate = parseD(ks[ks.length - 1]); S.rangeEnd = d.rangeEnd ? parseD(d.rangeEnd) : S.endDate; $('#extra').checked = st.extra !== false;
   buildDays(); toggleMode(); refreshAll(true); msg('저장한 편성을 불러왔습니다.');
 }
