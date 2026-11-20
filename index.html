@@ -148,7 +148,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   <table><thead><tr><th><input type="checkbox" id="bAll" title="전체 선택"></th><th>순서</th><th>구분</th><th>교과목</th><th>NCS 능력단위</th><th>시간</th><th>교사</th><th>강의실</th><th class="split-only">오전/오후</th><th>교과목 코드</th></tr></thead><tbody id="subjBody"></tbody></table>
   <div id="codeWarn"></div>
   <details><summary>공휴일·휴무일 목록 (한 줄에 하나: 2026-12-25 성탄절) — 학원 휴무일을 추가하세요</summary><textarea id="holidays"></textarea></details>
-  <p style="margin-top:12px"><button class="btn" id="btnGen">자동 편성</button></p>
+  <p style="margin-top:12px"><button class="btn" id="btnGen">자동 편성</button> <button class="btn ghost" id="btnShift" title="편성(드래그로 고친 칸·교사 포함)은 그대로 두고, 수업일 순서대로 새 개강일부터 옮깁니다">개강일만 바꾸기 (편성 그대로)</button>
+  <br><small style="color:var(--sub)">저장한 편성(.json)을 불러온 뒤 위의 개강일만 고치고 이 버튼을 누르면, 칸 배치는 그대로 두고 날짜만 옮깁니다. 새 기간의 공휴일은 자동으로 건너뜁니다.</small></p>
 </section>
 
 <section id="result" hidden>
@@ -521,6 +522,32 @@ function generate() {
   assignTeachers();
   buildDays(); refreshAll(true);
 }
+/* ---------- 개강일만 바꾸기: 편성(칸·교사·옮긴 칸)은 그대로, 수업일 순서대로 새 개강일부터 다시 놓기 ---------- */
+function shiftStart() {
+  if (!S.settings || !Object.keys(S.lessons).length) return msg('먼저 편성을 만들거나 저장한 편성(.json)을 불러와 주세요.');
+  const ns = $('#start').value, st = S.settings, os = st.start;
+  if (!ns) return msg('새 개강일을 입력해 주세요.');
+  if (ns === os) return msg('개강일이 지금과 같습니다. 위의 개강일 칸을 새 날짜로 바꾼 뒤 눌러 주세요.');
+  const isClass = (d, hol) => st.weekdays.includes(d.getDay()) && !hol[dkey(d)];
+  // 예전 수업일 순번 (예전 공휴일 기준)
+  const oldHol = S.holidays, lastK = Object.keys(S.lessons).map(k => k.split('|')[0]).sort().pop();
+  const endO = [lastK, dkey(S.rangeEnd || S.endDate)].sort().pop();
+  const ord = {}; let n = 0;
+  for (let d = parseD(os); dkey(d) <= endO; d = addD(d, 1)) if (isClass(d, oldHol)) ord[dkey(d)] = n++;
+  // 새 수업일 목록 (지금 공휴일 목록 기준 — 새 기간의 공휴일·휴무일은 자동으로 건너뜀)
+  const newHol = readHolidays(), nd = []; let guard = 0;
+  for (let d = parseD(ns); nd.length < n && guard++ < 2000; d = addD(d, 1)) if (isClass(d, newHol)) nd.push(dkey(d));
+  if (nd.length < n) return msg('새 개강일로 옮길 수업일을 다 찾지 못했습니다. 요일·공휴일 설정을 확인해 주세요.');
+  const miss = Object.keys(S.lessons).filter(k => ord[k.split('|')[0]] === undefined);
+  if (miss.length) return msg('수업일이 아닌 날에 있는 칸이 있어 옮기지 못했습니다: ' + miss.slice(0, 3).join(', '));
+  const L = {}, T = {};
+  Object.keys(S.lessons).forEach(k => { const [dk, p] = k.split('|'), k2 = nd[ord[dk]] + '|' + p; L[k2] = S.lessons[k]; if (S.lt && S.lt[k] !== undefined) T[k2] = S.lt[k]; });
+  const rOrd = Object.keys(ord).filter(x => x <= dkey(S.rangeEnd || S.endDate)).length - 1;
+  S.lessons = L; S.lt = T; S.holidays = newHol; S.settings = { ...st, start: ns };
+  recalcEnd(); S.rangeEnd = rOrd >= 0 ? parseD(nd[rOrd]) : S.endDate;
+  buildDays(); refreshAll(true);
+  msg(`편성은 그대로 두고 개강일을 ${os} → ${ns}(으)로 옮겼습니다. 수료일 ${dkey(S.endDate)}`);
+}
 function buildDays() {
   const st = S.settings; S.days = [];
   const e0 = S.rangeEnd || S.endDate, e = addD(e0, Math.max(0, 5 - e0.getDay()));   // 마지막 주 금요일까지
@@ -863,6 +890,7 @@ window.addEventListener('DOMContentLoaded', () => {
   $('#btnPrint').onclick = () => dlPrint().catch(e => msg('오류: ' + e.message));
   $('#btnEval').onclick = () => dlEval().catch(e => msg('오류: ' + e.message));
   $('#btnJson').onclick = saveJson;
+  $('#btnShift').onclick = shiftStart;
   $('#bTgo').onclick = () => bulkApply('t');
   $('#bRgo').onclick = () => bulkApply('r');
   $('#bAll').onchange = e => { S.sel = new Set(e.target.checked ? S.subjects.map((_, i) => i) : []); $$('.sChk').forEach(c => c.checked = e.target.checked); };
