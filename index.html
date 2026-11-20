@@ -148,7 +148,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       <section><h2>과목별 시간</h2><table id="totals"></table></section>
       <section><h2>내려받기</h2><div class="dl">
         <button class="btn" id="btnElec">① 전자시간표 (HRD 업로드용)<small>샘플과 같은 서식</small></button>
-        <button class="btn" id="btnPrint">② 출력용시간표<small>한 장에 한 주(월~금), A4 세로</small></button>
+        <button class="btn" id="btnPrint">② 출력용시간표<small>한 장에 한 주(월~금), 수업 없는 날 회색, 아래쪽에 주차 표시</small></button>
         <button class="btn" id="btnEval">③ 평가일정 (평가날출력-4번)<small>성적 파일 B~W열에 값 붙여넣기</small></button>
         <button class="btn ghost" id="btnJson">편성 저장 (.json)<small>나중에 불러와서 이어서 수정</small></button>
       </div></section>
@@ -583,6 +583,23 @@ async function dlPrint() {
   const tpl = [...Array(9)].map((_, i) => tplRow(i));         // 틀은 4교시 뒤 점심형: 4번째(0부터)가 점심
   const styleFor = (pos, isLunch) => isLunch ? tpl[4] : (pos === 4 && S.settings.lunchAfter === 3 ? tpl[2] : tpl[pos]);
   const rc = $('#room').value, rshort = roomShort(rc);
+  // 수업 없는 날용 회색 서식: 블록 행에서 쓰는 서식마다 회색 채우기를 더한 복사본을 만듦
+  let styles = await zip.file('xl/styles.xml').async('string');
+  const fills = styles.match(/<fills count="(\d+)">([\s\S]*?)<\/fills>/);
+  const grayFill = +fills[1];
+  styles = styles.replace(fills[0], `<fills count="${grayFill + 1}">${fills[2]}<fill><patternFill patternType="solid"><fgColor rgb="FFEDEDED"/><bgColor indexed="64"/></patternFill></fill></fills>`);
+  const xfsM = styles.match(/<cellXfs count="(\d+)">([\s\S]*?)<\/cellXfs>/);
+  const xfs = xfsM[2].match(/<xf\b[^>]*?(?:\/>|>[\s\S]*?<\/xf>)/g);
+  const grayOf = {}; let extra = '';
+  const used = new Set(tpl.flatMap(t => Object.values(t.st)));
+  [...used].forEach(id => {
+    let x = xfs[+id].replace(/fillId="\d+"/, `fillId="${grayFill}"`);
+    x = /applyFill=/.test(x) ? x.replace(/applyFill="\d"/, 'applyFill="1"') : x.replace('<xf ', '<xf applyFill="1" ');
+    grayOf[id] = String(xfs.length + Object.keys(grayOf).length); extra += x;
+  });
+  styles = styles.replace(xfsM[0], `<cellXfs count="${xfs.length + Object.keys(grayOf).length}">${xfsM[2]}${extra}</cellXfs>`);
+  zip.file('xl/styles.xml', styles);
+  const grayStyle = st => Object.fromEntries(Object.entries(st).map(([c, v]) => [c, c === 'A' ? v : grayOf[v]]));
   let r = 6, cum = 0, out = '', merges = [], breaks = [];
   const OD = weekDays();
   OD.forEach((d, di) => {
@@ -590,7 +607,7 @@ async function dlPrint() {
     const dayTot = usedPeriods().filter(p => S.lessons[k + '|' + p] !== undefined).length;
     cum += dayTot;
     T.rows.forEach((pr, pos) => {
-      const isL = pr.p === '점심', sty = styleFor(pos, isL).st, rr = r + pos;
+      const isL = pr.p === '점심', rr = r + pos, sty = dayTot ? styleFor(pos, isL).st : grayStyle(styleFor(pos, isL).st);
       const v = isL ? undefined : S.lessons[k + '|' + pr.p];
       const s = v !== undefined ? S.subjects[v] : null;
       let c = '';
@@ -618,6 +635,7 @@ async function dlPrint() {
   let x = sh.replace(/<sheetData>[\s\S]*<\/sheetData>/, '<sheetData>' + top + out + '</sheetData>')
     .replace(/<mergeCells[^>]*>[\s\S]*?<\/mergeCells>/, `<mergeCells count="${headMerges.length + merges.length}">${headMerges.join('')}${merges.map(m => `<mergeCell ref="${m}"/>`).join('')}</mergeCells>`)
     .replace(/<dimension ref="[^"]+"\/>/, `<dimension ref="A1:M${last}"/>`);
+  x = x.replace(/(<pageSetup[^>]*\/>)/, `$1<headerFooter><oddFooter>&amp;C&amp;"맑은 고딕,굵게"&amp;14&amp;P주차 / 전체 &amp;N주</oddFooter></headerFooter>`);
   if (breaks.length) x = x.replace('</worksheet>', `<rowBreaks count="${breaks.length}" manualBreakCount="${breaks.length}">${breaks.map(b => `<brk id="${b}" max="16383" man="1"/>`).join('')}</rowBreaks></worksheet>`);
   zip.file('xl/worksheets/sheet1.xml', x);
   const sheetName = `출력용시간표(${S.settings.lunchAfter}교시)`;
