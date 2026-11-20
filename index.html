@@ -54,6 +54,9 @@ td.tcell{min-width:190px}.trow{display:flex;gap:4px;align-items:center;margin-bo
 tr.sub td{font-size:11.5px;color:#555;padding-top:1px;padding-bottom:1px}tr.sub td:first-child{padding-left:22px}
 small.tm{font-weight:bold}small.tm.t1{color:#b3261e}small.tm.t2{color:#1d5fbf}select.cellSel{font-size:11px;max-width:100%}
 #totals th,#tTotals th,#tTotals td:first-child,tr.sub td:first-child{white-space:nowrap}#tTotals td:nth-child(2){font-size:11.5px}
+.bulk{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;background:#f3f6fb;border:1px solid #dde3ec;border-radius:6px;padding:8px 10px;margin:10px 0 6px;font-size:13px}.bulk select{width:auto;max-width:240px}
+.bbtn{border:1px solid var(--acc);color:var(--acc);background:#fff;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:12.5px}.bbtn:hover{background:var(--acc);color:#fff}
+small.rm{color:#6a4c93}th.pre{color:#aaa}
 td.slot{cursor:grab}td.slot.empty{background:#fff;cursor:default}
 td.slot.extra{background:repeating-linear-gradient(135deg,#fff,#fff 6px,#eef3ff 6px,#eef3ff 12px)}
 tr.extrarow td.pc{background:#eef3ff}td.pc em{font-style:normal;font-size:10.5px;color:var(--acc);border:1px solid var(--acc);border-radius:3px;padding:0 3px}
@@ -139,7 +142,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       <label><input type="checkbox" class="wchk" value="1" checked>월</label><label><input type="checkbox" class="wchk" value="2" checked>화</label><label><input type="checkbox" class="wchk" value="3" checked>수</label><label><input type="checkbox" class="wchk" value="4" checked>목</label><label><input type="checkbox" class="wchk" value="5" checked>금</label></div></div>
     <div><label class="f">평가일정용 과정번호 · 과정구분</label><div style="display:flex;gap:6px"><input type="text" id="courseNo" placeholder="과정번호" style="width:40%"><input type="text" id="courseType" value="일반" style="width:60%"></div></div>
   </div>
-  <table><thead><tr><th>순서</th><th>구분</th><th>교과목</th><th>NCS 능력단위</th><th>시간</th><th>교사</th><th class="split-only">오전/오후</th><th>교과목 코드</th></tr></thead><tbody id="subjBody"></tbody></table>
+  <div class="bulk"><b>일괄 등록</b> — 왼쪽 칸에서 과목을 체크한 뒤
+    <span>교사 <select id="bT"></select> <button type="button" class="bbtn" id="bTgo">체크한 과목에 교사 넣기</button></span>
+    <span>강의실 <select id="bR"></select> <button type="button" class="bbtn" id="bRgo">체크한 과목에 강의실 넣기</button></span></div>
+  <table><thead><tr><th><input type="checkbox" id="bAll" title="전체 선택"></th><th>순서</th><th>구분</th><th>교과목</th><th>NCS 능력단위</th><th>시간</th><th>교사</th><th>강의실</th><th class="split-only">오전/오후</th><th>교과목 코드</th></tr></thead><tbody id="subjBody"></tbody></table>
   <div id="codeWarn"></div>
   <details><summary>공휴일·휴무일 목록 (한 줄에 하나: 2026-12-25 성탄절) — 학원 휴무일을 추가하세요</summary><textarea id="holidays"></textarea></details>
   <p style="margin-top:12px"><button class="btn" id="btnGen">자동 편성</button></p>
@@ -359,6 +365,9 @@ function buildSubjects() {
 }
 const COLORS = ['#cfe2ff', '#ffe0c2', '#d4f0d4', '#f5d0e6', '#fff1b8', '#d9d2f5', '#c9eef0', '#f2d6c9', '#e2e8c0', '#f0c8c8'];
 const roomCode = name => { const r = (S.codes?.rooms || []).find(x => x.name.startsWith(name) || name.startsWith(x.name)); return r ? r.code : ''; };
+const allRooms = () => [...new Set([...(S.plan?.rooms || []), ...(S.codes?.rooms || []).map(r => r.name)])].filter(Boolean);
+const allTeachers = () => [...new Set([...(S.plan?.teachers || []), ...Object.keys(S.codes?.teachers || {})])].filter(Boolean);
+const subjRoom = s => (s && s.room) || $('#room').value;   // 과목에 강의실을 따로 정하지 않으면 과정 기본 강의실
 const roomShort = name => String(name || '').replace(/_DS.*$/, '').replace(/\(.*$/, '').trim();
 const teacherCode = n => (S.codes?.teachers || {})[n] || '';
 /* ---------- 한 과목을 여러 교사(최대 3명)가 나눠 맡기 ---------- */
@@ -387,19 +396,45 @@ function renderSetup() {
   $('#planInfo').innerHTML = `<b>${esc(p.name)}</b> · 교과목 ${p.subjects.length}개 · 총 ${p.totalHours}시간 · 교사 ${p.teachers.map(esc).join(', ') || '-'} · 시설 ${p.rooms.map(esc).join(', ') || '-'}`;
   const tlist = [...new Set([...p.teachers, ...Object.keys(S.codes?.teachers || {})])];
   const tsel = cur => (tlist.length ? tlist : [cur]).map(t => `<option ${t === cur ? 'selected' : ''}>${esc(t)}</option>`).join('');
+  S.sel = S.sel || new Set();
+  const rlist = allRooms();
+  const rsel = cur => `<option value="" ${cur ? '' : 'selected'}>(과정 기본 강의실)</option>` + rlist.map(r => `<option ${r === cur ? 'selected' : ''}>${esc(r)}</option>`).join('');
+  const bt = $('#bT').value, br = $('#bR').value;
+  $('#bT').innerHTML = tlist.map(t => `<option>${esc(t)}</option>`).join('');
+  $('#bR').innerHTML = rsel('');
+  if (bt && tlist.includes(bt)) $('#bT').value = bt; if (br && rlist.includes(br)) $('#bR').value = br;
   $('#subjBody').innerHTML = S.subjects.map((s, i) => `<tr>
+    <td><input type="checkbox" class="sChk" data-i="${i}" ${S.sel.has(i) ? 'checked' : ''}></td>
     <td><span class="sw" style="background:${s.color}"></span>${i + 1}</td><td>${esc(s.kind)}</td><td>${esc(s.name)}</td>
     <td>${esc(s.ncs ? s.unit : '')}</td><td class="num">${s.hours}</td>
     <td class="tcell">${teacherCell(s, i, tsel)}</td>
+    <td><select data-i="${i}" class="rSel">${rsel(s.room || '')}</select></td>
     <td class="split-only"><select data-i="${i}" class="hSel"><option value="am" ${s.half === 'am' ? 'selected' : ''}>오전</option><option value="pm" ${s.half === 'pm' ? 'selected' : ''}>오후</option></select></td>
     <td class="code ${s.code ? '' : 'miss'}">${s.code ? esc(s.code) : '코드 없음'}</td></tr>`).join('');
   bindTeacherCells(tlist);
+  $$('.rSel').forEach(e => e.onchange = () => { S.subjects[+e.dataset.i].room = e.value; checkCodes(); if (S.settings) refreshAll(false); });
+  $$('.sChk').forEach(e => e.onchange = () => { e.checked ? S.sel.add(+e.dataset.i) : S.sel.delete(+e.dataset.i); $('#bAll').checked = S.sel.size === S.subjects.length; });
+  $('#bAll').checked = S.subjects.length > 0 && S.sel.size === S.subjects.length;
   $$('.hSel').forEach(e => e.onchange = () => { S.subjects[+e.dataset.i].half = e.value; });
   const rv = $('#room').value;
   $('#room').innerHTML = (p.rooms.length ? p.rooms : ['']).map(r => `<option>${esc(r)}</option>`).join('');
   if (rv && p.rooms.includes(rv)) $('#room').value = rv;
   $('#setup').hidden = false;
   checkCodes();
+}
+/* ---------- 교사·강의실 일괄 등록: 체크한 과목에 한 번에 넣기 ---------- */
+function bulkApply(kind) {
+  if (!S.sel || !S.sel.size) return msg('먼저 왼쪽 칸에서 과목을 체크해 주세요. (맨 위 체크 = 전체 선택)');
+  const n = S.sel.size, val = kind === 't' ? $('#bT').value : ($('#bR').value || '(과정 기본)');
+  S.sel.forEach(i => {
+    const s = S.subjects[i];
+    if (kind === 't') { s.tsplit = [{ t: $('#bT').value, h: s.hours }]; syncTeacher(s); }
+    else s.room = $('#bR').value;
+  });
+  renderSetup();
+  if (kind === 't' && S.settings && Object.keys(S.lessons).length) S.sel.forEach(i => assignTeachers(i));
+  if (S.settings) refreshAll(false);
+  msg(`체크한 과목 ${n}개에 ${kind === 't' ? '교사' : '강의실'} '${val}'을(를) 넣었습니다.`);
 }
 function teacherCell(s, i, tsel) {
   const sp = splitOf(s), H = s.hours, sum = sp.reduce((a, x) => a + (+x.h || 0), 0);
@@ -437,7 +472,7 @@ function checkCodes() {
   const miss = [];
   if (!S.codes) { $('#codeWarn').textContent = '코드표를 넣으면 강사·시설·교과목 코드가 자동으로 붙습니다.'; return; }
   S.subjects.forEach(s => { if (!s.code) miss.push(`교과목 '${s.name}'`); splitOf(s).forEach(x => { if (!teacherCode(x.t)) miss.push(`교사 '${x.t}'`); }); });
-  if (!roomCode($('#room').value)) miss.push(`시설 '${$('#room').value}'`);
+  [...new Set([$('#room').value, ...S.subjects.map(subjRoom)])].forEach(r => { if (!roomCode(r)) miss.push(`시설 '${r}'`); });
   $('#codeWarn').innerHTML = miss.length ? '⚠ 코드표에서 찾지 못한 항목: ' + [...new Set(miss)].map(esc).join(', ') : '✔ 모든 코드를 찾았습니다.';
 }
 
@@ -488,7 +523,8 @@ function generate() {
 }
 function buildDays() {
   const st = S.settings; S.days = [];
-  for (let d = parseD(st.start); d <= (S.rangeEnd || S.endDate); d = addD(d, 1)) if (d.getDay() >= 1 && d.getDay() <= 5) S.days.push(new Date(d));
+  const e0 = S.rangeEnd || S.endDate, e = addD(e0, Math.max(0, 5 - e0.getDay()));   // 마지막 주 금요일까지
+  for (let d = parseD(st.start); d <= e; d = addD(d, 1)) if (d.getDay() >= 1 && d.getDay() <= 5) S.days.push(new Date(d));
 }
 function refreshAll(scroll) {
   if (!S.settings) return;
@@ -498,7 +534,7 @@ function refreshAll(scroll) {
   if (scroll) $('#result').scrollIntoView({ behavior: 'smooth' });
 }
 const extraPeriods = () => { const ps = S.settings.periods; if (S.settings.extra === false || !ps.length) return []; return [ps[0] - 1, ps[ps.length - 1] + 1].filter(p => p >= 1 && p <= 8 && !ps.includes(p)); };
-const isSlot = (d, p) => S.settings.weekdays.includes(d.getDay()) && !S.holidays[dkey(d)] && (S.settings.periods.includes(p) || extraPeriods().includes(p));
+const isSlot = (d, p) => d >= parseD(S.settings.start) && S.settings.weekdays.includes(d.getDay()) && !S.holidays[dkey(d)] && (S.settings.periods.includes(p) || extraPeriods().includes(p));
 const usedPeriods = () => { const set = new Set(S.settings.periods); Object.keys(S.lessons).forEach(k => set.add(+k.split('|')[1])); return [...set].sort((a, b) => a - b); };
 const outDays = () => S.days.filter(d => d <= S.endDate);
 // 출력용: 개강 주 월요일 ~ 수료 주 금요일의 모든 월~금
@@ -510,12 +546,15 @@ function recalcEnd() { const ks = Object.keys(S.lessons).map(k => k.split('|')[0
 function renderPreview() {
   const T = periodTable(S.settings.lunchAfter);
   const weeks = []; let cur = [];
-  S.days.forEach(d => { if (cur.length && d.getDay() === 1) { weeks.push(cur); cur = []; } cur.push(d); });
+  // 주차 달력은 항상 월~금: 개강 주 월요일부터 채움
+  const pre = []; for (let d = addD(S.days[0], -((S.days[0].getDay() + 6) % 7)); d < S.days[0]; d = addD(d, 1)) pre.push(new Date(d));
+  [...pre, ...S.days].forEach(d => { if (cur.length && d.getDay() === 1) { weeks.push(cur); cur = []; } cur.push(d); });
   if (cur.length) weeks.push(cur);
   const sDate = S.days[0], eDate = S.endDate;
   $('#summary').innerHTML = `훈련기간 <b>${dkey(sDate)} ~ ${dkey(eDate)}</b>${S.rangeEnd && S.endDate < S.rangeEnd ? ' <span class="bad">(옮긴 칸 때문에 수료일이 앞당겨짐)</span>' : ''} · 수업일 <b>${new Set(Object.keys(S.lessons).map(k => k.split('|')[0])).size}일</b> · 편성 <b>${Object.keys(S.lessons).length}시간</b>`;
   $('#preview').innerHTML = weeks.map((w, wi) => {
-    const head = w.map(d => `<th class="${S.holidays[dkey(d)] ? 'hol' : ''}">${d.getMonth() + 1}/${d.getDate()}(${WD[d.getDay()]})${S.holidays[dkey(d)] ? '<br><small>' + esc(S.holidays[dkey(d)]) + '</small>' : ''}</th>`).join('');
+    const s0 = parseD(S.settings.start);
+    const head = w.map(d => `<th class="${S.holidays[dkey(d)] ? 'hol' : ''}${d < s0 ? ' pre' : ''}">${d.getMonth() + 1}/${d.getDate()}(${WD[d.getDay()]})${S.holidays[dkey(d)] ? '<br><small>' + esc(S.holidays[dkey(d)]) + '</small>' : ''}</th>`).join('');
     const ps = [...new Set([...usedPeriods(), ...extraPeriods()])].sort((a, b) => a - b), showLunch = ps[0] <= T.lunchAfter && ps[ps.length - 1] > T.lunchAfter;
     const ex = extraPeriods();
     const body = T.rows.filter(r => r.p === '점심' ? showLunch : ps.includes(r.p)).map(r => {
@@ -525,8 +564,8 @@ function renderPreview() {
         if (!isSlot(d, r.p)) return `<td class="off"></td>`;
         if (v === undefined) return `<td class="slot empty${ex.includes(r.p) ? ' extra' : ''}" data-k="${k}"></td>`;
         const s = S.subjects[v];
-        const t = lessonT(k), sp = splitOf(s), tj = sp.findIndex(x => x.t === t);
-        return `<td class="slot" data-k="${k}" draggable="true" style="background:${s.color}" title="${esc(s.name)} / ${esc(t)} (두 번 클릭하면 이 칸 교사 바꾸기)">${esc(s.name)}<br><small class="${sp.length > 1 ? 'tm t' + Math.max(0, tj) : ''}">${esc(t)}</small></td>`;
+        const t = lessonT(k), sp = splitOf(s), tj = sp.findIndex(x => x.t === t), rm = s.room ? `<br><small class="rm">${esc(roomShort(s.room))}</small>` : '';
+        return `<td class="slot" data-k="${k}" draggable="true" style="background:${s.color}" title="${esc(s.name)} / ${esc(t)} / ${esc(subjRoom(s))} (두 번 클릭하면 이 칸 교사 바꾸기)">${esc(s.name)}<br><small class="${sp.length > 1 ? 'tm t' + Math.max(0, tj) : ''}">${esc(t)}</small>${rm}</td>`;
       }).join('')}</tr>`;
     }).join('');
     return `<table class="week"><caption>${wi + 1}주차</caption><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table>`;
@@ -643,7 +682,7 @@ async function dlElec() {
   const table = sis.slice(0, Math.max(...used) + 1).map(x => x.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'));
   const idx = new Map(table.map((x, i) => [x, i]));
   const sid = v => { v = String(v); if (!idx.has(v)) { idx.set(v, table.length); table.push(v); } return idx.get(v); };
-  const T = periodTable(S.settings.lunchAfter), rc = roomCode($('#room').value);
+  const T = periodTable(S.settings.lunchAfter);
   const rows = [];
   outDays().forEach(d => {
     const ps = usedPeriods().filter(p => S.lessons[dkey(d) + '|' + p] !== undefined);
@@ -654,7 +693,7 @@ async function dlElec() {
     items.sort((a, b) => a.t.localeCompare(b.t));
     items.forEach(it => {
       if (it.lunch) rows.push([ymd(d), st, en, 'N', it.t, '2', '', '', '']);
-      else { const s = S.subjects[S.lessons[dkey(d) + '|' + it.p]]; rows.push([ymd(d), st, en, 'N', it.t, '1', teacherCode(lessonT(dkey(d) + '|' + it.p)), rc, s.code]); }
+      else { const s = S.subjects[S.lessons[dkey(d) + '|' + it.p]]; rows.push([ymd(d), st, en, 'N', it.t, '1', teacherCode(lessonT(dkey(d) + '|' + it.p)), roomCode(subjRoom(s)), s.code]); }
     });
   });
   let n = 0;
@@ -682,7 +721,6 @@ async function dlPrint() {
   const tplRow = i => { const x = rowXml(6 + i); const st = {}; [...x.matchAll(/<c r="([A-Z]+)\d+" s="(\d+)"/g)].forEach(m => st[m[1]] = m[2]); return { ht: (x.match(/ht="([\d.]+)"/) || [])[1] || '27.95', st }; };
   const tpl = [...Array(9)].map((_, i) => tplRow(i));         // 틀은 4교시 뒤 점심형: 4번째(0부터)가 점심
   const styleFor = (pos, isLunch) => isLunch ? tpl[4] : (pos === 4 && S.settings.lunchAfter === 3 ? tpl[2] : tpl[pos]);
-  const rc = $('#room').value, rshort = roomShort(rc);
   // 수업 없는 날용 회색 서식: 블록 행에서 쓰는 서식마다 회색 채우기를 더한 복사본을 만듦
   let styles = await zip.file('xl/styles.xml').async('string');
   const fills = styles.match(/<fills count="(\d+)">([\s\S]*?)<\/fills>/);
@@ -720,7 +758,7 @@ async function dlPrint() {
       c += cStr('G' + rr, sty.G, s ? s.name : (pos === 0 && hol ? hol : ''));
       c += cStr('H' + rr, sty.H, s ? (s.ncs ? s.unit : s.name) : '');
       c += cStr('I' + rr, sty.I, s ? (s.ncs ? s.unit : (s.unitDetail || s.name)) : '');
-      c += cStr('J' + rr, sty.J, s ? rshort : '');
+      c += cStr('J' + rr, sty.J, s ? roomShort(subjRoom(s)) : '');
       c += cStr('K' + rr, sty.K, s ? lessonT(k + '|' + pr.p) : '');
       c += pos === 0 ? cNum('L' + rr, sty.L, dayTot || '') : cNum('L' + rr, sty.L, '');
       c += pos === 0 ? cNum('M' + rr, sty.M, dayTot ? cum : '') : cNum('M' + rr, sty.M, '');
@@ -757,14 +795,13 @@ async function dlEval() {
   const y = S.days[0].getFullYear(), teachers = teacherNames();
   let r2 = rowXml(2).replace(/(<t>)[\s\S]*?(<\/t>)/, `$1${y}년   훈 련 실 시 계 획 서$2`);
   const r3 = `<row r="3">${cStr('B3', st3, '과정번호')}${cStr('D3', st3, $('#courseNo').value)}${cStr('E3', st3, $('#courseType').value)}${cStr('F3', st3, S.plan.name)}${cStr('J3', st3, `훈련기간 : ${dkey(S.days[0]).replace(/-/g, '.')} ~ ${dkey(S.endDate).replace(/-/g, '.')} `)}${cStr('O3', st3, teachers[0] || '')}${cStr('R3', st3, teachers[1] || '')}</row>`;
-  const rs = roomShort($('#room').value);
   const body = evalPlan().map((e, i) => {
     const s = e.s, r = 5 + i, ncs = !!s.ncs;
     const vals = [
       ['B', 'n', i + 1], ['C', 'n', s.idx + 1], ['D', 's', s.code], ['E', 's', s.kind], ['F', 's', s.name],
       ['G', 's', norm(ncs ? s.unit : s.name)], ['H', 's', ncs ? `[${s.ncs}]` : `[${s.kind}]`], ['I', 's', ncs ? s.unit : s.name],
       ['J', 's', ncs && s.level ? `${s.level}수준` : '1수준'], ['K', 's', s.method], ['L', 's', ''], ['M', 'n', 0], ['N', 's', ''], ['O', 'n', 0],
-      ['P', 'n', parseD(e.main).getMonth() + 1], ['Q', 'n', e.hours], ['R', 's', rs], ['S', 's', e.teacher],
+      ['P', 'n', parseD(e.main).getMonth() + 1], ['Q', 'n', e.hours], ['R', 's', roomShort(subjRoom(s))], ['S', 's', e.teacher],
       ['T', 'n', serial(parseD(e.first))], ['U', 'n', serial(parseD(e.main))], ['V', 'n', serial(parseD(e.e2))], ['W', 'n', serial(parseD(e.e3))]];
     return `<row r="${r}">` + vals.map(([c, t, v]) => t === 'n' ? cNum(c + r, st5[c], v) : cStr(c + r, st5[c], v)).join('') + '</row>';
   }).join('');
@@ -826,6 +863,9 @@ window.addEventListener('DOMContentLoaded', () => {
   $('#btnPrint').onclick = () => dlPrint().catch(e => msg('오류: ' + e.message));
   $('#btnEval').onclick = () => dlEval().catch(e => msg('오류: ' + e.message));
   $('#btnJson').onclick = saveJson;
+  $('#bTgo').onclick = () => bulkApply('t');
+  $('#bRgo').onclick = () => bulkApply('r');
+  $('#bAll').onchange = e => { S.sel = new Set(e.target.checked ? S.subjects.map((_, i) => i) : []); $$('.sChk').forEach(c => c.checked = e.target.checked); };
   $('#btnLoad').onclick = () => $('#fJson').click();
 });
 function confirmBox() { return window.confirm('드래그로 고친 내용이 처음부터 다시 편성됩니다. 계속할까요?'); }
