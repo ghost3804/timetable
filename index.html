@@ -155,7 +155,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     </div>
   </div>
   <section style="margin-top:14px"><h2>평가 예정일 (능력단위별)</h2><table class="evt"><thead><tr><th>능력단위</th><th>시간</th><th>사전계획(첫 수업일)</th><th>본평가</th><th>2차</th><th>3차</th></tr></thead><tbody id="evalBody"></tbody></table>
-    <p class="hint">본평가 = 편성시간 80% 시점이 들어 있는 날 · 2차·3차 = 앞 평가 +7일(수업 없는 날이면 다음 수업일, 수료일을 넘으면 다음 수업일로 당김). 노란 칸은 같은 날 평가가 겹친 경우입니다.</p></section>
+    <p class="hint">본평가 = 편성시간 80% 시점이 들어 있는 날 · 2차·3차 = 앞 평가 +7일(수업 없는 날이면 다음 수업일, 수료일을 넘으면 다음 수업일로 당김). 노란 칸은 같은 날 평가가 겹친 경우입니다. 운영계획서에 평가방법이 비어 있는 과목(예: 재량교과)은 평가일정에서 뺍니다.</p></section>
 </section>
 <div id="msg" hidden></div>
 </main>
@@ -232,7 +232,9 @@ async function readRows(file) {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: 'array' });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  return XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true, blankrows: true });
+  // 시트 범위가 B1처럼 A1이 아닌 곳에서 시작해도 칸 번호가 밀리지 않도록 항상 A1부터 읽음
+  const rg = XLSX.utils.decode_range(ws['!ref'] || 'A1'); rg.s.c = 0; rg.s.r = 0;
+  return XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true, blankrows: true, range: rg });
 }
 const cellS = v => String(v ?? '').trim();
 
@@ -249,14 +251,16 @@ function parsePlan(rows) {
     if (i >= 0 && ne[i + 1]) { plan.name = ne[i + 1][1]; break; }
   }
   // 교과편성연계표 구간
-  const SEC = { 'NCS소양교과': '소양', 'NCS전공교과': '전공', '비NCS교과(이론)': '비NCS 이론', '비NCS교과(실기)': '비NCS 실기' };
-  let sec = null, hdr = null, inTable = false;
+  // 형식 1: '■ 교과편성연계표' 아래 소양/전공/비NCS(이론)/비NCS(실기)
+  // 형식 2: NCS 비적용 과정 — 'NCS 비적용 교과' 표 하나, 시간은 이론+실기
+  const SEC = { 'NCS소양교과': '소양', 'NCS전공교과': '전공', '비NCS교과(이론)': '비NCS 이론', '비NCS교과(실기)': '비NCS 실기', 'NCS비적용교과': '비NCS' };
+  let sec = null, hdr = null, started = false;
   for (let r = 0; r < rows.length; r++) {
     const t = rowText(r), n = norm(t);
-    if (n.includes('교과편성연계표')) { inTable = true; continue; }
-    if (!inTable) continue;
-    if (n.startsWith('■') && !n.includes('교과편성연계표')) break;
-    if (SEC[n]) { sec = SEC[n]; hdr = null; continue; }
+    if (n.includes('교과편성연계표')) { started = true; continue; }
+    if (started && n.startsWith('■')) break;
+    if (n.startsWith('■교수학습방법과평가방법')) break;
+    if (SEC[n]) { sec = SEC[n]; hdr = null; started = true; continue; }
     if (!sec || isNoise(r) || !t) continue;
     if (norm(get(r, 1)) === '교과목') {
       hdr = {};
@@ -265,12 +269,15 @@ function parsePlan(rows) {
     }
     if (!hdr) continue;
     const first = get(r, 1);
-    if (!first || /^총\s*훈련시간|조회된|등록된/.test(first)) { if (/^총\s*훈련시간/.test(first)) { sec = null; hdr = null; } continue; }
+    if (!first || /^총\s*(훈련|이론|실기)시간|조회된|등록된/.test(first)) { if (/^총\s*(훈련|이론|실기)시간/.test(first)) { sec = null; hdr = null; } continue; }
     const col = k => { const key = Object.keys(hdr).find(h => h.startsWith(k)); return key === undefined ? -1 : hdr[key]; };
-    const hours = parseFloat(get(r, col('편성'))) || 0;
+    const th = col('이론'), ph = col('실기');
+    const hours = col('편성') >= 0 ? (parseFloat(get(r, col('편성'))) || 0) : (parseFloat(get(r, th)) || 0) + (parseFloat(get(r, ph)) || 0);
     const tRaw = get(r, col('훈련교'));
     const teachers = tRaw.split(/\n/).map(x => x.replace(/\[.*?\]/g, '').trim()).filter(Boolean);
-    const s = { kind: sec, name: first, hours, teachers, ncs: '', unit: first, level: '' };
+    let kind = sec;
+    if (sec === '비NCS') kind = (parseFloat(get(r, ph)) || 0) > 0 ? '비NCS 실기' : '비NCS 이론';
+    const s = { kind, name: first, hours, teachers, ncs: '', unit: first, level: '' };
     if (sec === '전공') {
       const u = get(r, col('NCS능력단위'));
       const m = u.match(/\[([^\]]+)\]\s*(.*)/);
@@ -338,7 +345,7 @@ function buildSubjects() {
     ...s, idx: i,
     teacher: s.teachers[0] || p.teachers[0] || '',
     code: cd.subjects[norm(s.name)] || '',
-    method: p.methods[norm(s.unit)] || p.methods[norm(s.name)] || '평가자 체크리스트',
+    method: (k => k === undefined ? '평가자 체크리스트' : p.methods[k])([norm(s.unit), norm(s.name)].find(k => k in p.methods)),
     half: i < Math.ceil(p.subjects.length / 2) ? 'am' : 'pm', color: COLORS[i % COLORS.length]
   }));
 }
@@ -497,13 +504,17 @@ function evalPlan() {
   const plus7 = k => dkey(addD(parseD(k), 7));
   return S.subjects.map(s => {
     const hrs = keys.filter(k => S.lessons[k] === s.idx).map(k => k.split('|')[0]);
-    if (!hrs.length) return { s, none: true };
+    if (!hrs.length || s.method === '') return { s, none: true };   // 평가방법이 비어 있으면(예: 재량교과) 평가일정에서 뺌
     const first = hrs[0];
     let main = hrs[Math.max(0, Math.ceil(hrs.length * 0.8) - 1)];
     const rest = days.filter(x => x > main);
     if (rest.length < 2) main = days[Math.max(0, days.length - 3)];
     const step = prev => { const c = plus7(prev); if (c > end) return nextDay(prev) || prev; return firstOnOrAfter(c) || nextDay(prev) || prev; };
-    const e2 = step(main), e3 = step(e2);
+    let e2 = step(main), e3 = step(e2);
+    if (!(main < e2 && e2 < e3)) {                 // 남은 날이 모자라 같은 날로 겹치면: 다음 수업일로 연달아
+      e2 = nextDay(main); e3 = e2 && nextDay(e2);
+      if (!e3) { main = days[Math.max(0, days.length - 3)]; e2 = days[Math.max(0, days.length - 2)]; e3 = days[days.length - 1]; }
+    }
     return { s, first, main, e2, e3, hours: hrs.length };
   }).filter(x => !x.none).sort((a, b) => a.main < b.main ? -1 : a.main > b.main ? 1 : a.s.idx - b.s.idx);
 }
