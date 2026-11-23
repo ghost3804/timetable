@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>시간표 자동 편성 (1차)</title>
+<style>
+:root{--ink:#1d2433;--sub:#5b6577;--line:#d9dee7;--bg:#f6f7f9;--acc:#2f5bd3;--warn:#c0392b}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Malgun Gothic","맑은 고딕",system-ui,sans-serif;color:var(--ink);background:var(--bg);font-size:14px}
+header{background:#1f2a44;color:#fff;padding:14px 24px}
+header h1{margin:0;font-size:19px}
+header p{margin:4px 0 0;color:#c9d2e3;font-size:12.5px}
+main{max-width:1280px;margin:0 auto;padding:18px 20px 60px}
+section{background:#fff;border:1px solid var(--line);border-radius:8px;padding:16px 18px;margin-bottom:16px}
+h2{font-size:15.5px;margin:0 0 12px}
+h2 .step{display:inline-block;background:var(--acc);color:#fff;border-radius:50%;width:22px;height:22px;text-align:center;line-height:22px;font-size:12px;margin-right:6px}
+.drops{display:grid;grid-template-columns:1fr 1fr 220px;gap:12px}
+.dz{border:2px dashed #b8c2d6;border-radius:8px;padding:16px;text-align:center;cursor:pointer;background:#fafbfd}
+.dz.over{border-color:var(--acc);background:#eef3ff}
+.dz b{display:block;margin-bottom:4px}.dz span{color:var(--sub);font-size:12.5px;word-break:break-all}
+.btn{border:1px solid var(--acc);background:var(--acc);color:#fff;border-radius:6px;padding:8px 14px;font:inherit;cursor:pointer}
+.btn.ghost{background:#fff;color:var(--acc)}
+.btn:hover{filter:brightness(1.08)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px 20px;margin-bottom:12px}
+label.f{display:block;font-size:12.5px;color:var(--sub);margin-bottom:4px}
+input[type=date],input[type=text],select,textarea{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:5px;width:100%;background:#fff}
+textarea{height:120px;font-size:12px;font-family:Consolas,monospace}
+.chks label{margin-right:10px;white-space:nowrap}
+table{border-collapse:collapse;width:100%}
+th,td{border:1px solid var(--line);padding:5px 7px;text-align:left;vertical-align:middle}
+th{background:#f0f2f6;font-weight:600;font-size:12.5px}
+td.num{text-align:right}
+.code{font-size:11.5px;color:var(--sub);word-break:break-all}.code.miss{color:var(--warn);font-weight:600}
+.sw{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:6px;vertical-align:-1px;border:1px solid #0002}
+#planInfo,#codeWarn,#summary{margin:6px 0 10px;color:var(--sub)}
+#codeWarn{font-size:12.5px}
+.split-only{display:none}body.split .split-only{display:table-cell}body.split .split-row{display:block}.split-row{display:none}
+.layout{display:grid;grid-template-columns:1fr 290px;gap:16px;align-items:start}
+#preview{max-height:780px;overflow:auto;padding-right:4px}
+table.week{margin-bottom:14px;table-layout:fixed;width:auto}
+table.week th:not(:first-child),table.week td:not(.pc){width:150px}
+table.evt td,table.evt th{white-space:nowrap}
+table.week caption{text-align:left;font-weight:600;padding:4px 0;color:var(--sub)}
+table.week th:first-child,table.week td.pc{width:92px}
+table.week td{height:46px;font-size:12px;text-align:center;line-height:1.25}
+table.week th{text-align:center}
+table.week th.hol{background:#fde2e1;color:var(--warn)}
+td.pc{background:#f7f8fa;font-weight:600}td.pc small{font-weight:400;color:var(--sub)}
+td.off{background:repeating-linear-gradient(45deg,#fafafa,#fafafa 5px,#f0f0f0 5px,#f0f0f0 10px)}
+td.tcell{min-width:190px}.trow{display:flex;gap:4px;align-items:center;margin-bottom:3px;font-size:12px}.trow select{flex:1;min-width:80px}.trow input.tH{width:46px}
+.tDel,.tAdd{border:1px solid #c8d0dc;background:#fff;border-radius:4px;cursor:pointer;font-size:11.5px;padding:1px 6px}.tAdd{color:var(--acc)}.tDel{color:#c0392b}
+.tfoot{display:flex;gap:8px;align-items:center}.tsum{font-size:11.5px}.tsum.ok{color:#2e7d32}.tsum.bad{color:#c0392b;font-weight:bold}
+tr.sub td{font-size:11.5px;color:#555;padding-top:1px;padding-bottom:1px}tr.sub td:first-child{padding-left:22px}
+small.tm{font-weight:bold}small.tm.t1{color:#b3261e}small.tm.t2{color:#1d5fbf}select.cellSel{font-size:11px;max-width:100%}
+#totals th,#tTotals th,#tTotals td:first-child,tr.sub td:first-child{white-space:nowrap}#tTotals td:nth-child(2){font-size:11.5px}
+.bulk{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;background:#f3f6fb;border:1px solid #dde3ec;border-radius:6px;padding:8px 10px;margin:10px 0 6px;font-size:13px}.bulk select{width:auto;max-width:240px}
+.bbtn{border:1px solid var(--acc);color:var(--acc);background:#fff;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:12.5px}.bbtn:hover{background:var(--acc);color:#fff}
+small.rm{color:#6a4c93}th.pre{color:#aaa}
+.tools{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:10px 0 6px;font-size:13px}.tools .sep{width:1px;height:18px;background:#d5dbe5}
+.bbtn.on{background:var(--acc);color:#fff}#refInfo{font-size:12.5px;margin:4px 0}.rchip{display:inline-flex;gap:4px;align-items:center;background:#eef3ff;border:1px solid #cdd8ee;border-radius:12px;padding:1px 4px 1px 9px;margin:2px}
+#orderPanel{border:1px solid #dde3ec;border-radius:8px;padding:10px 12px;margin:6px 0;background:#fafbfd}.ocols{display:grid;grid-template-columns:1fr 1fr;gap:12px}.ocols.one{grid-template-columns:1fr}
+.ot{font-weight:bold;font-size:13px;margin-bottom:6px}.ot small{font-weight:normal;color:var(--sub)}.olist{display:flex;flex-direction:column;gap:4px;min-height:60px;max-height:520px;overflow:auto;padding:4px;border:1px dashed #cfd7e3;border-radius:6px;background:#fff}
+.ocard{display:flex;gap:6px;align-items:center;padding:5px 8px;border-radius:5px;cursor:grab;font-size:12.5px;border:1px solid #0001}.ocard .on{flex:1}.ocard .oh{color:#555;font-size:11.5px;white-space:nowrap}.ocard .og{color:#999;letter-spacing:-2px}
+.ocard.over{outline:2px solid var(--acc)}.ocard.dragging{opacity:.4}.oend{font-size:11px;color:#9aa;text-align:center;padding:6px}
+.ptools{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px;font-size:12px}.ptools .lg{color:var(--sub)}
+span.lk{display:inline-block;font-size:10px;background:#444;color:#fff;border-radius:3px;padding:0 3px;margin-right:3px;vertical-align:1px}
+td.slot.locked{cursor:not-allowed;box-shadow:inset 0 0 0 2px #444}td.slot.clash{outline:3px solid #e53935;outline-offset:-3px}.clashlg{color:#e53935;font-weight:bold}
+body.lockmode td.slot:not(.empty){cursor:pointer}body.lockmode #preview{outline:2px dashed var(--acc);outline-offset:4px}
+td.slot{cursor:grab}td.slot.empty{background:#fff;cursor:default}
+td.slot.extra{background:repeating-linear-gradient(135deg,#fff,#fff 6px,#eef3ff 6px,#eef3ff 12px)}
+tr.extrarow td.pc{background:#eef3ff}td.pc em{font-style:normal;font-size:10.5px;color:var(--acc);border:1px solid var(--acc);border-radius:3px;padding:0 3px}
+td.slot.over{outline:3px solid var(--acc);outline-offset:-3px}td.slot.dragging{opacity:.45}
+tr.lunchrow td{background:#fbf6e9;height:24px;font-size:11px;color:#8a6d1f}
+td small{color:#445}
+.bad{color:var(--warn);font-weight:700}.warn{background:#fff3cd}
+.side section{margin-bottom:12px}
+.dl{display:flex;flex-direction:column;gap:8px}
+.dl .btn{text-align:left}
+.dl small{display:block;font-size:11.5px;opacity:.85}
+#msg{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1f2a44;color:#fff;padding:10px 18px;border-radius:6px;box-shadow:0 4px 18px #0004;z-index:9}
+.hint{font-size:12px;color:var(--sub);margin:6px 0 0}
+details summary{cursor:pointer;color:var(--sub);font-size:12.5px}
+</style>
+<!--LIBS-->
+</head>
+<body>
+<header><h1>시간표 자동 편성 (1차)</h1><p>운영계획서와 코드표를 넣으면 전자시간표 · 출력용시간표 · 평가일정을 만듭니다. 파일은 이 PC의 브라우저 안에서만 처리되고 밖으로 나가지 않습니다.</p></header>
+<main>
+<section>
+  <h2><span class="step">1</span>파일 넣기</h2>
+  <div class="drops">
+    <div class="dz" id="dzPlan"><b>운영계획서 (.xls / .xlsx)</b><span id="planName">여기에 끌어 놓거나 눌러서 고르세요</span></div>
+    <div class="dz" id="dzCodes"><b>코드표 (.xlsx)</b><span id="codeName">여기에 끌어 놓거나 눌러서 고르세요</span></div>
+    <div class="dz" id="dzLoad" onclick="document.getElementById('btnLoad').click()"><b>이어서 수정하기</b><span>④ '편성 저장'으로 받은 .json 파일<br>(처음 편성할 때는 필요 없어요)</span></div>
+  </div>
+  <input type="file" id="fPlan" accept=".xls,.xlsx" hidden><input type="file" id="fCodes" accept=".xlsx,.xls" hidden><input type="file" id="fJson" accept=".json" hidden><button id="btnLoad" hidden></button>
+</section>
+
+<section id="setup" hidden>
+  <h2><span class="step">2</span>조건 입력</h2>
+  <div id="planInfo"></div>
+  <div class="grid">
+    <div><label class="f">개강일</label><input type="date" id="start"></div>
+    <div><label class="f">점심 위치</label><select id="lunch"><option value="4">4교시 뒤 (4교시 12:00-12:50, 점심 12:50-13:40)</option><option value="3">3교시 뒤 (점심 11:50-12:40, 4교시 12:40-13:30)</option></select></div>
+    <div><label class="f">강의실</label><select id="room"></select></div>
+    <div><label class="f">편성 방식</label><select id="mode"><option value="seq">시간순 (교과목 순서대로)</option><option value="split">오전·오후 나눠서</option></select>
+      <div class="split-row" style="margin-top:6px"><label><input type="checkbox" id="spill" checked> 한쪽이 먼저 끝나면 남은 칸을 다른 쪽 과목으로 채우기</label></div></div>
+  </div>
+  <div class="grid">
+    <div><label class="f">수업 교시</label><div class="chks">
+      <label><input type="checkbox" class="pchk" value="1">1</label><label><input type="checkbox" class="pchk" value="2" checked>2</label><label><input type="checkbox" class="pchk" value="3" checked>3</label><label><input type="checkbox" class="pchk" value="4" checked>4</label>
+      <label><input type="checkbox" class="pchk" value="5">5</label><label><input type="checkbox" class="pchk" value="6">6</label><label><input type="checkbox" class="pchk" value="7">7</label><label><input type="checkbox" class="pchk" value="8">8</label></div></div>
+    <div><label class="f">여유 칸</label><label><input type="checkbox" id="extra" checked> 체크한 교시의 앞뒤 1교시를 여유 칸으로 보이기<br><small style="color:var(--sub)">자동 편성은 비워 두고, 자투리 시간을 드래그로 옮길 때 씁니다</small></label></div>
+    <div><label class="f">수업 요일</label><div class="chks">
+      <label><input type="checkbox" class="wchk" value="1" checked>월</label><label><input type="checkbox" class="wchk" value="2" checked>화</label><label><input type="checkbox" class="wchk" value="3" checked>수</label><label><input type="checkbox" class="wchk" value="4" checked>목</label><label><input type="checkbox" class="wchk" value="5" checked>금</label></div></div>
+    <div><label class="f">평가일정용 과정번호 · 과정구분</label><div style="display:flex;gap:6px"><input type="text" id="courseNo" placeholder="과정번호" style="width:40%"><input type="text" id="courseType" value="일반" style="width:60%"></div></div>
+  </div>
+  <div class="bulk"><b>일괄 등록</b> — 왼쪽 칸에서 과목을 체크한 뒤
+    <span>교사 <select id="bT"></select> <button type="button" class="bbtn" id="bTgo">체크한 과목에 교사 넣기</button></span>
+    <span>강의실 <select id="bR"></select> <button type="button" class="bbtn" id="bRgo">체크한 과목에 강의실 넣기</button></span></div>
+  <table><thead><tr><th><input type="checkbox" id="bAll" title="전체 선택"></th><th>순서</th><th>구분</th><th>교과목</th><th>NCS 능력단위</th><th>시간</th><th>교사</th><th>강의실</th><th class="split-only">오전/오후</th><th>교과목 코드</th></tr></thead><tbody id="subjBody"></tbody></table>
+  <div id="codeWarn"></div>
+  <div class="tools">
+    <button type="button" class="bbtn" id="btnOrder">세부설정 (편성 순서) ▾</button>
+    <span class="sep"></span>
+    <button type="button" class="bbtn" id="btnFixTpl">고정일정 양식 받기</button>
+    <button type="button" class="bbtn" id="btnFixLoad">고정일정 넣기</button>
+    <span id="fixedInfo"></span>
+    <span class="sep"></span>
+    <button type="button" class="bbtn" id="btnRef" title="다른 과정의 편성 저장(.json) 또는 전자시간표(.xlsx) 여러 개">기준 시간표 넣기</button>
+    <button type="button" class="bbtn" id="btnRefDir" title="과정별 파일이 모여 있는 폴더를 통째로">폴더째 넣기</button>
+    <label><input type="checkbox" id="avoid" checked> 기준 시간표와 교사·강의실 겹치지 않게 편성</label>
+  </div>
+  <div id="refInfo"></div>
+  <div id="orderPanel" hidden></div>
+  <input type="file" id="fFixed" accept=".xlsx,.xls" hidden><input type="file" id="fRef" accept=".json,.xlsx" multiple hidden><input type="file" id="fRefDir" webkitdirectory multiple hidden>
+  <details><summary>공휴일·휴무일 목록 (한 줄에 하나: 2026-12-25 성탄절) — 학원 휴무일을 추가하세요</summary><textarea id="holidays"></textarea></details>
+  <p style="margin-top:12px"><button class="btn" id="btnGen">자동 편성</button> <button class="btn ghost" id="btnShift" title="편성(드래그로 고친 칸·교사 포함)은 그대로 두고, 수업일 순서대로 새 개강일부터 옮깁니다">개강일만 바꾸기 (편성 그대로)</button>
+  <br><small style="color:var(--sub)">저장한 편성(.json)을 불러온 뒤 위의 개강일만 고치고 이 버튼을 누르면, 칸 배치는 그대로 두고 날짜만 옮깁니다. 새 기간의 공휴일은 자동으로 건너뜁니다.</small></p>
+</section>
+
+<section id="result" hidden>
+  <h2><span class="step">3</span>미리보기 · 수정 · 내려받기</h2>
+  <div id="summary"></div>
+  <div class="layout">
+    <div><div class="ptools"><button type="button" class="bbtn" id="btnLockMode">칸 고정하기</button> <button type="button" class="bbtn" id="btnFixExport">고정 칸을 양식으로 내보내기</button> <span class="lg"><span class="lk">고정</span> 고정 칸 · <span class="clashlg">빨간 테두리</span> 기준 시간표와 겹침</span></div><p class="hint" style="margin:0 0 8px">칸을 끌어서 다른 칸에 놓으면 두 칸이 서로 바뀝니다(빈 칸으로도 옮길 수 있어요). 과목별 총시간은 그대로 유지됩니다. 칸을 <b>두 번 클릭</b>하면 그 칸의 교사만 바꿀 수 있어요.</p><div id="preview"></div></div>
+    <div class="side">
+      <section><h2>과목별 시간</h2><table id="totals"></table></section>
+      <section><h2>교사별 시간</h2><table id="tTotals"></table></section>
+      <section><h2>내려받기</h2><div class="dl">
+        <button class="btn" id="btnElec">① 전자시간표 (HRD 업로드용)<small>샘플과 같은 서식</small></button>
+        <button class="btn" id="btnPrint">② 출력용시간표<small>한 장에 한 주(월~금), 수업 없는 날 회색, 아래쪽에 주차 표시</small></button>
+        <button class="btn" id="btnEval">③ 평가일정 (평가날출력-4번)<small>성적 파일 B~W열에 값 붙여넣기</small></button>
+        <button class="btn ghost" id="btnJson">편성 저장 (.json)<small>나중에 불러와서 이어서 수정</small></button>
+      </div></section>
+    </div>
+  </div>
+  <section style="margin-top:14px"><h2>평가 예정일 (능력단위별)</h2><table class="evt"><thead><tr><th>능력단위</th><th>평가 교사</th><th>시간</th><th>사전계획(첫 수업일)</th><th>본평가</th><th>2차</th><th>3차</th></tr></thead><tbody id="evalBody"></tbody></table>
+    <p class="hint">본평가 = 편성시간 80% 시점이 들어 있는 날 · 2차·3차 = 앞 평가 +7일(수업 없는 날이면 다음 수업일, 수료일을 넘으면 다음 수업일로 당김). 노란 칸은 같은 날 평가가 겹친 경우입니다. 운영계획서에 평가방법이 비어 있는 과목(예: 재량교과)은 평가일정에서 뺍니다.</p></section>
+</section>
+<div id="msg" hidden></div>
+</main>
+<!--APP-->
+</body>
+</html>
