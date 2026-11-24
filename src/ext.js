@@ -34,15 +34,21 @@ function renderOrder() {
   const el = $('#orderPanel'); if (!el || el.hidden || !S.subjects.length) return;
   ensureOrder();
   const st = settings(), split = st.mode === 'split';
-  const amN = st.periods.filter(p => p <= st.lunchAfter).length, pmN = st.periods.length - amN;
+  const amP = st.periods.filter(p => p <= st.lunchAfter), pmP = st.periods.filter(p => p > st.lunchAfter);
+  const rng = a => a.length ? (a.length > 1 ? `${a[0]}~${a[a.length - 1]}교시` : `${a[0]}교시`) : '없음';
   const hh = (key, i) => { const s = S.subjects[i]; return key === 'am' ? amH(s) : key === 'pm' ? pmH(s) : s.hours; };
   const card = (key, i, n) => { const s = S.subjects[i], both = split && s.half === 'both';
-    return `<div class="ocard${both ? ' both' : ''}" draggable="true" data-i="${i}" style="background:${s.color}"><span class="og">⋮⋮</span><b>${n}.</b><span class="on">${esc(s.name)}${both ? ' <em>나눔</em>' : ''}</span><span class="oh">${hh(key, i)}시간${both ? '/' + s.hours : ''} · ${esc(s.teacher)}</span></div>`; };
-  const list = (key, title, arr) => `<div class="ocol"><div class="ot">${title} <small>${arr.reduce((a, i) => a + hh(key, i), 0)}시간</small></div><div class="olist" data-h="${key}">${arr.map((i, n) => card(key, i, n + 1)).join('')}<div class="oend" data-h="${key}">여기에 놓으면 맨 뒤로</div></div></div>`;
-  el.innerHTML = `<p class="hint" style="margin:0 0 8px">카드를 끌어서 순서를 바꾸세요. ${split ? '오전↔오후 칸 사이로 옮기면 그 시간대로 바뀝니다. ' : ''}바꾼 뒤 <b>[자동 편성]</b>을 누르면 이 순서대로 채웁니다. (고정일정 칸은 먼저 박히고 남은 시간만 채움)</p>
-    <div class="ocols${split ? '' : ' one'}">${split
-      ? list('am', `오전 (${amN}교시)`, S.order.filter(i => inAm(S.subjects[i]))) + list('pm', `오후 (${pmN}교시)`, S.orderPm.filter(i => inPm(S.subjects[i])))
-      : list('any', '편성 순서 (위에서부터 차례로)', S.order)}</div>${split ? '<p class="hint" style="margin:6px 0 0">한 과목을 오전·오후에 나눠 넣으려면 위 과목 표의 오전/오후 칸에서 <b>나눠서</b>를 고르고 오전 시간을 적으세요. 그 과목은 양쪽 목록에 함께 나오고, 목록마다 순서를 따로 정할 수 있습니다.</p>' : ''}`;
+    const ctl = !split ? '' : both
+      ? (key === 'am' ? `<label class="ohx">오전 <input type="number" class="oAm" data-i="${i}" min="0" max="${s.hours}" value="${amH(s)}" draggable="false">/${s.hours}시간</label>` : `<span class="ohx">오후 ${pmH(s)}/${s.hours}시간</span>`)
+        + `<button type="button" class="obtn oJoin" data-i="${i}" data-h="${key}" title="나누지 않고 이 목록(${key === 'am' ? '오전' : '오후'})에만 넣기">합치기</button>`
+      : `<button type="button" class="obtn oSplit" data-i="${i}" title="이 과목을 오전·오후에 나눠 넣기">나누기</button>`;
+    return `<div class="ocard${both ? ' both' : ''}" draggable="true" data-i="${i}" style="background:${s.color}"><span class="og">⋮⋮</span><b>${n}.</b><span class="on">${esc(s.name)}${both ? ' <em>나눔</em>' : ''}</span>${both ? '' : `<span class="oh">${hh(key, i)}시간</span>`}<span class="oh">${esc(s.teacher)}</span>${ctl}</div>`; };
+  const list = (key, title, arr) => `<div class="ocol"><div class="ot">${title} <small>· 합계 ${arr.reduce((a, i) => a + hh(key, i), 0)}시간</small></div><div class="olist" data-h="${key}">${arr.map((i, n) => card(key, i, n + 1)).join('')}<div class="oend" data-h="${key}">여기에 놓으면 맨 뒤로</div></div></div>`;
+  el.innerHTML = split
+    ? `<p class="hint" style="margin:0 0 8px">카드를 끌어 <b>뿌리는 순서</b>를 바꾸고, 오전↔오후 목록 사이로 옮기면 그 시간대로 바뀝니다. <b>[나누기]</b>를 누르면 한 과목을 오전 몇 시간 + 오후 나머지로 나눠 양쪽 목록에 넣습니다. [자동 편성]을 누르면 오전 띠는 오전 목록 순서대로, 오후 띠는 오후 목록 순서대로 채웁니다. (고정일정 칸은 먼저 박히고 남은 시간만 채움)</p>
+    <div class="ocols">${list('am', `오전 하루 ${amP.length}시간 <small>(${rng(amP)})</small>`, S.order.filter(i => inAm(S.subjects[i]))) + list('pm', `오후 하루 ${pmP.length}시간 <small>(${rng(pmP)})</small>`, S.orderPm.filter(i => inPm(S.subjects[i])))}</div>`
+    : `<p class="hint" style="margin:0 0 8px">지금은 편성 방식이 <b>시간순</b>이라 오전·오후 구분 없이 아래 순서대로 이어서 채웁니다. <button type="button" class="bbtn" id="oToSplit">오전·오후 순서 따로 정하기</button></p>
+    <div class="ocols one">${list('any', '편성 순서 (위에서부터 차례로)', S.order)}</div>`;
   const move = (i, beforeI, h) => {
     const s = S.subjects[i];
     if (h === 'am' && s.half === 'pm') s.half = 'am';
@@ -68,6 +74,12 @@ function renderOrder() {
     l.ondragover = e => e.preventDefault();
     l.ondrop = e => { e.preventDefault(); if (dragO === null) return; const i = dragO; dragO = null; move(i, undefined, l.dataset.h); };
   });
+  // 카드 안 버튼·입력칸: 끌기와 섞이지 않게
+  $$('#orderPanel .obtn, #orderPanel .oAm').forEach(x => { x.onmousedown = e => e.stopPropagation(); x.ondragstart = e => { e.preventDefault(); e.stopPropagation(); }; });
+  $$('#orderPanel .oSplit').forEach(b => b.onclick = () => { const s = S.subjects[+b.dataset.i]; s.half = 'both'; if (!(s.amH >= 0) || s.amH >= s.hours || s.amH <= 0) s.amH = Math.ceil(s.hours / 2); renderSetup(); });
+  $$('#orderPanel .oJoin').forEach(b => b.onclick = () => { S.subjects[+b.dataset.i].half = b.dataset.h; renderSetup(); });
+  $$('#orderPanel .oAm').forEach(x => x.onchange = () => { const s = S.subjects[+x.dataset.i]; s.amH = Math.max(0, Math.min(s.hours, Math.round(+x.value || 0))); renderSetup(); });
+  const ts = $('#oToSplit'); if (ts) ts.onclick = () => { $('#mode').value = 'split'; toggleMode(); renderSetup(); };
 }
 
 /* ---------- 고정일정 ---------- */
@@ -422,6 +434,7 @@ async function onElecImport(file) {
     const r1 = (most(mine.map(c => c.r))[0] || [''])[0]; s.room = r1 && r1 !== room0 ? r1 : '';
   });
   if (!fromPlan) S.plan.totalHours = S.subjects.reduce((a, s) => a + s.hours, 0);
+  if (!fromPlan) S.subjects.forEach((s, j) => s.half = j < Math.ceil(S.subjects.length / 2) ? 'am' : 'pm');   // 운영계획서와 같은 기본값: 앞쪽 절반 오전, 나머지 오후
   S.order = S.subjects.map(s => s.idx); S.orderPm = null; S.manT = {}; S.subst = {}; if (!fromPlan) S.trules = [];
   // 화면 조건 맞추기
   const days = [...new Set(cells.map(c => c.k.split('|')[0]))].sort();
@@ -518,8 +531,8 @@ function renderOverview() {
   const mon = d => addD(d, -((d.getDay() + 6) % 7));
   const w0 = mon(S.days[0]), weeks = []; for (let d = w0; d <= S.endDate; d = addD(d, 7)) weeks.push(d);
   const wOf = dk => Math.floor((parseD(dk) - w0) / 6048e5);
-  const cnt = {}, first = {}, tot = {};
-  lessonKeysSorted().forEach(k => { const i = S.lessons[k], dk = k.split('|')[0], w = wOf(dk); cnt[i + '|' + w] = (cnt[i + '|' + w] || 0) + 1; tot[i] = (tot[i] || 0) + 1; if (!first[i]) first[i] = dk; });
+  const cnt = {}, first = {}, lastD = {}, tot = {};
+  lessonKeysSorted().forEach(k => { const i = S.lessons[k], dk = k.split('|')[0], w = wOf(dk); cnt[i + '|' + w] = (cnt[i + '|' + w] || 0) + 1; tot[i] = (tot[i] || 0) + 1; if (!first[i]) first[i] = dk; lastD[i] = dk; });
   const ev = {}; evalPlan().forEach(e => { ev[e.s.idx] = e; });
   const rows = S.subjects.filter(s => tot[s.idx]).sort((a, b) => first[a.idx] < first[b.idx] ? -1 : first[a.idx] > first[b.idx] ? 1 : a.idx - b.idx);
   const maxW = Math.max(1, ...Object.values(cnt));
@@ -528,10 +541,12 @@ function renderOverview() {
   const mark = (s, w) => { const e = ev[s.idx]; if (!e) return ''; return [[e.main, '●', '본평가'], [e.e2, '○', '2차'], [e.e3, '○', '3차']].filter(x => wOf(x[0]) === w).map(x => `<i class="${x[1] === '●' ? 'em' : 'e2'}" title="${x[2]} ${fmtK(x[0])}">${x[1]}</i>`).join(''); };
   el.innerHTML = `<div class="ovwrap"><table class="ov"><thead><tr><th rowspan="2" class="ovn">교과목 <small>(시간)</small></th>${mh.map(x => `<th colspan="${x.n}" class="ovm">${x.m.split('.')[1]}월</th>`).join('')}</tr>
     <tr>${weeks.map((d, w) => `<th class="ovw" title="${w + 1}주차 ${d.getMonth() + 1}/${d.getDate()}~">${w + 1}</th>`).join('')}</tr></thead><tbody>
-    ${rows.map(s => `<tr><td class="ovn"><span class="sw" style="background:${s.color}"></span>${esc(s.name)} <small>${tot[s.idx]}</small></td>${weeks.map((d, w) => {
-      const n = cnt[s.idx + '|' + w] || 0, m = mark(s, w);
-      return `<td data-w="${w}"${n ? ` class="on" style="background:${s.color};opacity:${(0.45 + 0.55 * n / maxW).toFixed(2)}"` : ''} title="${esc(s.name)} · ${w + 1}주차(${d.getMonth() + 1}/${d.getDate()}~)${n ? ` · ${n}시간` : ''}">${m}</td>`; }).join('')}</tr>`).join('')}
-    </tbody></table></div><p class="hint" style="margin:4px 0 0">칸 하나 = 한 주. 색이 진할수록 그 주에 수업이 많습니다. <b>●</b> 본평가 · <b>○</b> 2차·3차. 칸을 누르면 아래 주간 시간표의 그 주로 갑니다.</p>`;
+    ${rows.map(s => { const a = wOf(first[s.idx]), z = wOf(lastD[s.idx]);
+      return `<tr><td class="ovn"><span class="sw" style="background:${s.color}"></span>${esc(s.name)} <small>${tot[s.idx]}시간 · ${fmtK(first[s.idx])}~${fmtK(lastD[s.idx])}</small></td>${weeks.map((d, w) => {
+      const n = cnt[s.idx + '|' + w] || 0, m = mark(s, w), inBar = w >= a && w <= z;
+      const cls = inBar ? `bar${w === a ? ' bs' : ''}${w === z ? ' be' : ''}${n ? '' : ' gap'}` : '';
+      return `<td data-w="${w}"${cls ? ` class="${cls}"` : ''}><div class="ovc"${inBar ? ` style="background:${s.color};opacity:${n ? (0.55 + 0.45 * n / maxW).toFixed(2) : '0.3'}"` : ''} title="${esc(s.name)} · ${w + 1}주차(${d.getMonth() + 1}/${d.getDate()}~)${n ? ` · ${n}시간` : inBar ? ' · 이 주는 수업 없음' : ''}"></div>${m}</td>`; }).join('')}</tr>`; }).join('')}
+    </tbody></table></div><p class="hint" style="margin:4px 0 0">막대 = 첫 수업일부터 마지막 수업일까지(칸 하나 = 한 주). 색이 진할수록 그 주에 수업이 많고, 흐린 칸은 기간 중 수업이 없는 주입니다. <b>●</b> 본평가 · <b>○</b> 2차·3차. 칸을 누르면 아래 주간 시간표의 그 주로 갑니다.</p>`;
   $$('#overview td[data-w]').forEach(td => td.onclick = () => { const t = $('#wk' + td.dataset.w); if (t) { $('#preview').scrollTop = t.offsetTop - $('#preview').offsetTop; t.classList.add('flash'); setTimeout(() => t.classList.remove('flash'), 1200); } });
 }
 
@@ -544,7 +559,9 @@ function toggleLockMode() {
   document.body.classList.toggle('lockmode', S.lockMode);
 }
 function bindExtra() {
-  $('#btnOrder').onclick = () => { const el = $('#orderPanel'); el.hidden = !el.hidden; $('#btnOrder').classList.toggle('on', !el.hidden); renderOrder(); };
+  $('#btnOrder').onclick = () => { const el = $('#orderPanel'); el.hidden = !el.hidden; $('#btnOrder').classList.toggle('on', !el.hidden);
+    if (!el.hidden && $('#mode').value !== 'split') { $('#mode').value = 'split'; toggleMode(); if (S.subjects.length) renderSetup(); msg('세부설정: 편성 방식을 \'오전·오후 나눠서\'로 바꿨습니다. 오전 목록·오후 목록 순서대로 뿌립니다.'); }
+    renderOrder(); };
   $('#btnFixTpl').onclick = dlFixedTemplate;
   $('#btnFixLoad').onclick = () => $('#fFixed').click();
   $('#fFixed').addEventListener('change', e => { e.target.files[0] && onFixed(e.target.files[0]); e.target.value = ''; });
