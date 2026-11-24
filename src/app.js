@@ -162,7 +162,7 @@ function parsePlan(rows) {
 }
 
 function parseCodes(rows) {
-  const c = { teachers: {}, rooms: [], subjects: {} };
+  const c = { teachers: {}, rooms: [], subjects: {}, subjList: [] };
   let cat = '';
   rows.forEach((r, i) => {
     if (i === 0) return;
@@ -171,7 +171,10 @@ function parseCodes(rows) {
     if (!b || !e || e === '-') return;
     if (cat === '강사') c.teachers[b.replace(/\[.*?\]/g, '').trim()] = e;
     else if (cat === '시설') c.rooms.push({ name: b, code: e });
-    else if (cat === '교과목') c.subjects[norm(b.replace(/^\(.*?\)/, ''))] = e;
+    else if (cat === '교과목') {
+      const m = b.match(/^\((.*?)\)\s*(.*)$/), name = (m ? m[2] : b).trim();
+      c.subjects[norm(name)] = e; c.subjList.push({ name, code: e, kind: m ? m[1].trim() : '' });   // 전자시간표 불러오기에서 코드 → 이름
+    }
   });
   return c;
 }

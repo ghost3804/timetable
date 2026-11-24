@@ -15,7 +15,8 @@ main{max-width:1280px;margin:0 auto;padding:18px 20px 60px}
 section{background:#fff;border:1px solid var(--line);border-radius:8px;padding:16px 18px;margin-bottom:16px}
 h2{font-size:15.5px;margin:0 0 12px}
 h2 .step{display:inline-block;background:var(--acc);color:#fff;border-radius:50%;width:22px;height:22px;text-align:center;line-height:22px;font-size:12px;margin-right:6px}
-.drops{display:grid;grid-template-columns:1fr 1fr 220px;gap:12px}
+.drops{display:grid;grid-template-columns:1fr 1fr 210px 230px;gap:12px}
+.dz.elec{border-color:#9db7e8;background:#f4f8ff}
 .dz{border:2px dashed #b8c2d6;border-radius:8px;padding:16px;text-align:center;cursor:pointer;background:#fafbfd}
 .dz.over{border-color:var(--acc);background:#eef3ff}
 .dz b{display:block;margin-bottom:4px}.dz span{color:var(--sub);font-size:12.5px;word-break:break-all}
@@ -93,8 +94,10 @@ details summary{cursor:pointer;color:var(--sub);font-size:12.5px}
     <div class="dz" id="dzPlan"><b>운영계획서 (.xls / .xlsx)</b><span id="planName">여기에 끌어 놓거나 눌러서 고르세요</span></div>
     <div class="dz" id="dzCodes"><b>코드표 (.xlsx)</b><span id="codeName">여기에 끌어 놓거나 눌러서 고르세요</span></div>
     <div class="dz" id="dzLoad" onclick="document.getElementById('btnLoad').click()"><b>이어서 수정하기</b><span>④ '편성 저장'으로 받은 .json 파일<br>(처음 편성할 때는 필요 없어요)</span></div>
+    <div class="dz elec" id="dzElec"><b>전자시간표 불러와서 수정</b><span id="elecName">이미 만든 전자시간표 .xlsx<br>(코드표를 먼저 넣으면 이름으로 보여요)</span></div>
   </div>
-  <input type="file" id="fPlan" accept=".xls,.xlsx" hidden><input type="file" id="fCodes" accept=".xlsx,.xls" hidden><input type="file" id="fJson" accept=".json" hidden><button id="btnLoad" hidden></button>
+  <p class="hint">전자시간표만 넣어도 미리보기·드래그 수정·①②③ 내려받기가 됩니다. 운영계획서를 먼저 넣으면 교과목 구분·NCS 능력단위·평가방법(재량교과 제외)까지 그대로 맞춰집니다.</p>
+  <input type="file" id="fPlan" accept=".xls,.xlsx" hidden><input type="file" id="fCodes" accept=".xlsx,.xls" hidden><input type="file" id="fJson" accept=".json" hidden><input type="file" id="fElec" accept=".xlsx,.xls" hidden><button id="btnLoad" hidden></button>
 </section>
 
 <section id="setup" hidden>
