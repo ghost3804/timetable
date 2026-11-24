@@ -190,7 +190,7 @@ function buildSubjects() {
     method: (k => k === undefined ? '평가자 체크리스트' : p.methods[k])([norm(s.unit), norm(s.name)].find(k => k in p.methods)),
     half: i < Math.ceil(p.subjects.length / 2) ? 'am' : 'pm', color: COLORS[i % COLORS.length]
   }));
-  S.order = S.subjects.map(s => s.idx);
+  S.order = S.subjects.map(s => s.idx); S.orderPm = null; S.trules = []; S.manT = {}; S.subst = {};
 }
 const COLORS = ['#cfe2ff', '#ffe0c2', '#d4f0d4', '#f5d0e6', '#fff1b8', '#d9d2f5', '#c9eef0', '#f2d6c9', '#e2e8c0', '#f0c8c8'];
 const roomCode = name => { const r = (S.codes?.rooms || []).find(x => x.name.startsWith(name) || name.startsWith(x.name)); return r ? r.code : ''; };
@@ -238,13 +238,15 @@ function renderSetup() {
     <td>${esc(s.ncs ? s.unit : '')}</td><td class="num">${s.hours}</td>
     <td class="tcell">${teacherCell(s, i, tsel)}</td>
     <td><select data-i="${i}" class="rSel">${rsel(s.room || '')}</select></td>
-    <td class="split-only"><select data-i="${i}" class="hSel"><option value="am" ${s.half === 'am' ? 'selected' : ''}>오전</option><option value="pm" ${s.half === 'pm' ? 'selected' : ''}>오후</option></select></td>
+    <td class="split-only"><select data-i="${i}" class="hSel"><option value="am" ${s.half === 'am' ? 'selected' : ''}>오전</option><option value="pm" ${s.half === 'pm' ? 'selected' : ''}>오후</option><option value="both" ${s.half === 'both' ? 'selected' : ''}>나눠서</option></select>${s.half === 'both'
+      ? `<div class="amh">오전 <input type="number" min="0" max="${s.hours}" value="${amH(s)}" data-i="${i}" class="aH">시간<br><small>오후 ${s.hours - amH(s)}시간</small></div>` : ''}</td>
     <td class="code ${s.code ? '' : 'miss'}">${s.code ? esc(s.code) : '코드 없음'}</td></tr>`).join('');
   bindTeacherCells(tlist);
   $$('.rSel').forEach(e => e.onchange = () => { S.subjects[+e.dataset.i].room = e.value; checkCodes(); if (S.settings) refreshAll(false); });
   $$('.sChk').forEach(e => e.onchange = () => { e.checked ? S.sel.add(+e.dataset.i) : S.sel.delete(+e.dataset.i); $('#bAll').checked = S.sel.size === S.subjects.length; });
   $('#bAll').checked = S.subjects.length > 0 && S.sel.size === S.subjects.length;
-  $$('.hSel').forEach(e => e.onchange = () => { S.subjects[+e.dataset.i].half = e.value; if (typeof renderOrder === 'function') renderOrder(); });
+  $$('.hSel').forEach(e => e.onchange = () => { const s = S.subjects[+e.dataset.i]; s.half = e.value; if (e.value === 'both' && !(s.amH >= 0)) s.amH = Math.ceil(s.hours / 2); renderSetup(); });
+  $$('.aH').forEach(e => e.onchange = () => { const s = S.subjects[+e.dataset.i]; s.amH = Math.max(0, Math.min(s.hours, Math.round(+e.value || 0))); renderSetup(); });
   const rv = $('#room').value;
   $('#room').innerHTML = (p.rooms.length ? p.rooms : ['']).map(r => `<option>${esc(r)}</option>`).join('');
   if (rv && p.rooms.includes(rv)) $('#room').value = rv;
@@ -328,7 +330,7 @@ function buildDays() {
 function refreshAll(scroll) {
   if (!S.settings) return;
   recalcEnd();
-  renderPreview(); renderTotals(); renderEval();
+  renderPreview(); renderTotals(); renderEval(); if (typeof renderOverview === 'function') renderOverview();
   $('#result').hidden = false;
   if (scroll) $('#result').scrollIntoView({ behavior: 'smooth' });
 }
@@ -365,12 +367,12 @@ function renderPreview() {
         if (v === undefined) return `<td class="slot empty${ex.includes(r.p) ? ' extra' : ''}" data-k="${k}"></td>`;
         const s = S.subjects[v];
         const t = lessonT(k), sp = splitOf(s), tj = sp.findIndex(x => x.t === t), R = lessonR(k), rm = R !== $('#room').value ? `<br><small class="rm">${esc(roomShort(R))}</small>` : '';
-        const lk = isLocked(k), cl = lessonClash(k);
-        const tip = `${s.name} / ${t} / ${R}${lk ? '\n[고정 칸] 드래그로 움직이지 않습니다' : ''}${cl.length ? '\n⚠ 겹침: ' + cl.map(c => c.kind + ' — ' + c.label).join('\n   ') : ''}\n(두 번 클릭하면 이 칸 교사 바꾸기)`;
-        return `<td class="slot${lk ? ' locked' : ''}${cl.length ? ' clash' : ''}" data-k="${k}" draggable="${!lk}" style="background:${s.color}" title="${esc(tip)}">${lk ? '<span class="lk">고정</span>' : ''}${esc(s.name)}<br><small class="${sp.length > 1 ? 'tm t' + Math.max(0, tj) : ''}">${esc(t)}</small>${rm}</td>`;
+        const lk = isLocked(k), cl = lessonClash(k), un = isUnreg(s, t), sb = !!(S.subst && S.subst[k]);
+        const tip = `${s.name} / ${t} / ${R}${lk ? '\n[고정 칸] 드래그로 움직이지 않습니다' : ''}${un ? '\n[등록 외 교사] 운영계획서에 이 과목 교사로 등록되지 않음' : ''}${sb ? '\n[대체] 기준 시간표와 겹쳐 다른 교사로 자동 대체됨' : ''}${cl.length ? '\n⚠ 겹침: ' + cl.map(c => c.kind + ' — ' + c.label).join('\n   ') : ''}\n(두 번 클릭하면 이 칸 교사 바꾸기)`;
+        return `<td class="slot${lk ? ' locked' : ''}${cl.length ? ' clash' : ''}${un ? ' unreg' : ''}" data-k="${k}" draggable="${!lk}" style="background:${s.color}" title="${esc(tip)}">${lk ? '<span class="lk">고정</span>' : ''}${sb ? '<span class="sb">대체</span>' : ''}${esc(s.name)}<br><small class="${sp.length > 1 ? 'tm t' + Math.max(0, tj) : ''}">${esc(t)}</small>${rm}</td>`;
       }).join('')}</tr>`;
     }).join('');
-    return `<table class="week"><caption>${wi + 1}주차</caption><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table>`;
+    return `<table class="week" id="wk${wi}"><caption>${wi + 1}주차</caption><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table>`;
   }).join('');
   bindDrag();
 }
@@ -397,17 +399,18 @@ function bindDrag() {
       if (a === undefined) delete S.lessons[k2]; else S.lessons[k2] = a;
       if (tb === undefined) delete S.lt[dragK]; else S.lt[dragK] = tb;
       if (ta === undefined) delete S.lt[k2]; else S.lt[k2] = ta;
+      ['manT', 'subst'].forEach(n => { const m = S[n] = S[n] || {}, x = m[dragK], y = m[k2]; if (y) m[dragK] = y; else delete m[dragK]; if (x) m[k2] = x; else delete m[k2]; });
       dragK = null; S.edited = true; refreshAll(false);
     });
     // 두 번 클릭: 이 칸만 교사 바꾸기 (그 과목 담당 교사 → 다른 교사 순)
     td.addEventListener('dblclick', () => {
       const k = td.dataset.k, v = S.lessons[k]; if (v === undefined) return;
       const s = S.subjects[v], cur = lessonT(k);
-      const all = [...new Set([...splitOf(s).map(x => x.t), ...(S.plan?.teachers || []), ...Object.keys(S.codes?.teachers || {})])].filter(Boolean);
+      const all = [...new Set([cur, ...regT(s), ...splitOf(s).map(x => x.t), ...(allowOut() ? allTeachers() : [])])].filter(Boolean);
       const sel = document.createElement('select'); sel.className = 'cellSel';
       sel.innerHTML = all.map(t => `<option ${t === cur ? 'selected' : ''}>${esc(t)}</option>`).join('');
       td.draggable = false; td.querySelector('small').replaceWith(sel); sel.focus();
-      const done = () => { if (sel.value !== cur) { S.lt[k] = sel.value; S.edited = true; } refreshAll(false); };
+      const done = () => { if (sel.value !== cur) { S.lt[k] = sel.value; (S.manT = S.manT || {})[k] = 1; if (S.subst) delete S.subst[k]; S.edited = true; } refreshAll(false); };
       sel.onchange = done; sel.onblur = done;
     });
   });
@@ -624,7 +627,7 @@ async function dlEval() {
 /* ---------- 저장 / 불러오기 ---------- */
 function saveJson() {
   if (!needResult()) return;
-  const data = { version: 1, plan: S.plan, codes: S.codes, subjects: S.subjects, settings: S.settings, holidays: $('#holidays').value, lessons: S.lessons, lt: S.lt, lr: S.lr || {}, lock: S.lock || {}, order: S.order, fixedRows: S.fixedRows || [], fixedName: S.fixedName || '', rangeEnd: dkey(S.rangeEnd || S.endDate), room: $('#room').value, courseNo: $('#courseNo').value, courseType: $('#courseType').value };
+  const data = { version: 1, plan: S.plan, codes: S.codes, subjects: S.subjects, settings: S.settings, holidays: $('#holidays').value, lessons: S.lessons, lt: S.lt, lr: S.lr || {}, lock: S.lock || {}, order: S.order, orderPm: S.orderPm, trules: S.trules || [], manT: S.manT || {}, subst: S.subst || {}, allowOut: allowOut(), autoSub: $('#autoSub').checked, fixedRows: S.fixedRows || [], fixedName: S.fixedName || '', rangeEnd: dkey(S.rangeEnd || S.endDate), room: $('#room').value, courseNo: $('#courseNo').value, courseType: $('#courseType').value };
   saveBlob(new Blob([JSON.stringify(data)], { type: 'application/json' }), `편성저장_${courseTag()}.json`);
 }
 async function loadJson(file) {
@@ -635,7 +638,8 @@ async function loadJson(file) {
   $$('.pchk').forEach(e => e.checked = st.periods.includes(+e.value)); $$('.wchk').forEach(e => e.checked = st.weekdays.includes(+e.value));
   $('#holidays').value = d.holidays; $('#room').value = d.room; $('#courseNo').value = d.courseNo || ''; $('#courseType').value = d.courseType || '일반';
   S.holidays = readHolidays(); S.settings = st; S.lessons = d.lessons; S.lt = d.lt || {}; S.lr = d.lr || {}; S.lock = d.lock || {};
-  S.order = d.order; ensureOrder(); S.fixedRows = d.fixedRows || []; S.fixedName = d.fixedName || ''; renderFixedInfo();
+  S.order = d.order; S.orderPm = d.orderPm; ensureOrder();
+  S.trules = d.trules || []; S.manT = d.manT || {}; S.subst = d.subst || {}; $('#allowOut').checked = !!d.allowOut; $('#autoSub').checked = d.autoSub !== false; renderRules(); S.fixedRows = d.fixedRows || []; S.fixedName = d.fixedName || ''; renderFixedInfo();
   S.subjects.forEach(syncTeacher); if (!d.lt) assignTeachers();
   const ks = Object.keys(S.lessons).map(k => k.split('|')[0]).sort(); S.endDate = parseD(ks[ks.length - 1]); S.rangeEnd = d.rangeEnd ? parseD(d.rangeEnd) : S.endDate; $('#extra').checked = st.extra !== false;
   buildDays(); toggleMode(); refreshAll(true); msg('저장한 편성을 불러왔습니다.');
