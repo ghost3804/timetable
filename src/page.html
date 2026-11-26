@@ -104,21 +104,66 @@ table.ov .ovn{position:sticky;left:0;background:#fff;text-align:left;padding:2px
 table.ov .ovm{font-weight:600;background:#f0f2f6}table.ov .ovw{font-weight:400;color:var(--sub);font-size:10.5px;background:#f7f8fa}
 table.ov i{font-style:normal;font-size:12px;line-height:1}table.ov i.em{color:#c0392b}table.ov i.e2{color:#444}table.ov td:hover{outline:2px solid var(--acc);outline-offset:-2px}
 table.week.flash caption{background:#fff3cd}
+
+/* ===== 디자인: 검정 프레임 · 흰 바탕 · 초록 포인트 하나 · 2px 모서리 · 가는 회색 선 · 그림자 없음 ===== */
+:root{--ink:#000;--body:#1a1a1a;--sub:#757575;--line:#cccccc;--bg:#f7f7f7;--acc:#76b900;--acc-d:#5a8d00;--acc-t:#3f8500;--warn:#e52020}
+body{font-family:Inter,Arial,"Malgun Gothic","맑은 고딕",sans-serif;color:var(--body);background:var(--bg)}
+header{background:#000;color:#fff;padding:18px 32px 18px 48px;position:relative;border-bottom:4px solid var(--acc)}
+header::before{content:"";position:absolute;left:24px;top:22px;width:12px;height:12px;background:var(--acc)}
+header h1{font-size:22px;font-weight:700;letter-spacing:0}header p{color:rgba(255,255,255,.7);font-size:13px}
+section{border:1px solid var(--line);border-radius:2px;padding:20px 24px;position:relative;background:#fff}
+section::before{content:"";position:absolute;left:-1px;top:-1px;width:12px;height:12px;background:var(--acc)}
+h2{font-size:17px;font-weight:700;color:#000}
+h2 .step{border-radius:2px;background:var(--acc);color:#000;font-weight:700}
+.btn{border:2px solid var(--acc);background:var(--acc);color:#000;border-radius:2px;padding:10px 22px;font-weight:700;min-height:44px}
+.btn:hover{filter:none;background:var(--acc-d);border-color:var(--acc-d)}
+.btn.ghost{background:#fff;color:#000;border:2px solid var(--acc)}.btn.ghost:hover{background:#f4fae8;color:#000}
+.dl small{opacity:.75;font-weight:400}
+.bbtn{border:1px solid #000;color:#000;background:#fff;border-radius:2px;padding:4px 10px;font-weight:700}
+.bbtn:hover,.bbtn.on{background:#000;color:#fff;border-color:#000}
+.obtn,.tDel,.tAdd{border-radius:2px;border-color:var(--line)}.tAdd{color:var(--acc-t)}
+input[type=date],input[type=text],input[type=number],select,textarea{border:1px solid var(--line);border-radius:2px}
+input:focus,select:focus,textarea:focus{outline:none;border:2px solid var(--acc)}
+input[type=checkbox],input[type=radio]{accent-color:var(--acc)}
+th{background:#f7f7f7;font-weight:700;color:#000}th,td{border-color:var(--line)}
+.bulk,#orderPanel,#rulePanel,#cmapPanel{background:#f7f7f7;border:1px solid var(--line);border-radius:2px}
+/* 파일 넣기: 필수(흰 바탕·검정 점선) / 선택(회색 바탕·흐린 점선) */
+.dz{position:relative;border-radius:2px;padding:30px 14px 16px}
+td.slot.extra{background:repeating-linear-gradient(135deg,#fff,#fff 6px,#f0f0f0 6px,#f0f0f0 12px)}tr.extrarow td.pc{background:#f4fae8}
+.dz .tag{position:absolute;top:8px;right:8px;font-style:normal;font-size:11px;font-weight:700;padding:1px 7px;border-radius:2px}
+.dz.req{background:#fff;border:2px dashed #000}.dz.req .tag{background:var(--acc);color:#000}
+.dz.req b{color:#000}
+.dz.opt,.dz.opt.elec{background:#f0f0f0;border:2px dashed #a7a7a7}.dz.opt .tag{background:#fff;color:#5e5e5e;border:1px solid #a7a7a7}
+.dz.opt b{color:#5e5e5e}.dz.opt span{color:#898989}
+.dz.over,.dz:hover{border-color:var(--acc);background:#f4fae8}
+/* 미리보기 */
+table.week caption{color:#000;font-weight:700}td.pc{background:#f7f7f7}
+td.pc em{color:var(--acc-t);border-color:var(--acc-t);border-radius:2px}
+td.slot.over,td.slot.sel{outline:3px solid var(--acc);outline-offset:-3px}td.slot.sel{filter:brightness(.93)}
+.selbar{background:#f4fae8;border:1px solid var(--acc);border-radius:2px}
+#tray{background:#fff;border:1px dashed #a7a7a7;border-radius:2px}#tray.has{border:1px solid var(--warn);background:#fff6f6}#tray.over{outline:3px solid var(--acc)}
+.trayItems .chip{border-radius:2px;border-color:#5e5e5e}
+#cellMenu{border:1px solid var(--line);border-radius:2px;box-shadow:0 0 5px 0 rgba(0,0,0,.3)}#cellMenu button{border-radius:2px}#cellMenu button:hover{background:#f4fae8}
+.ocard,.rchip,.cm,.cmapN,span.lk,span.sb{border-radius:2px}.olist{border-radius:2px}.ocard.over{outline-color:var(--acc)}
+.ovwrap{border-radius:2px}table.ov td:hover{outline-color:var(--acc)}
+#msg{background:#000;color:#fff;border-radius:2px;border-left:6px solid var(--acc);box-shadow:0 0 5px 0 rgba(0,0,0,.3)}
+.layout .side section{padding:16px 18px}
+a{color:#0046a4}
 </style>
 <!--LIBS-->
 </head>
 <body>
-<header><h1>시간표 자동 편성 (1차)</h1><p>운영계획서와 코드표를 넣으면 전자시간표 · 출력용시간표 · 평가일정을 만듭니다. 파일은 이 PC의 브라우저 안에서만 처리되고 밖으로 나가지 않습니다.</p></header>
+<header><h1>시간표 자동 편성 (1차)</h1><p>HRD운영계획서와 코드표를 넣으면 전자시간표 · 출력용시간표 · 평가일정을 만듭니다. 파일은 이 PC의 브라우저 안에서만 처리되고 밖으로 나가지 않습니다.</p></header>
 <main>
 <section>
   <h2><span class="step">1</span>파일 넣기</h2>
   <div class="drops">
-    <div class="dz" id="dzPlan"><b>운영계획서 (.xls / .xlsx)</b><span id="planName">여기에 끌어 놓거나 눌러서 고르세요</span></div>
-    <div class="dz" id="dzCodes"><b>코드표 (.xlsx)</b><span id="codeName">여기에 끌어 놓거나 눌러서 고르세요</span></div>
-    <div class="dz" id="dzLoad" onclick="document.getElementById('btnLoad').click()"><b>이어서 수정하기</b><span>④ '편성 저장'으로 받은 .json 파일<br>(처음 편성할 때는 필요 없어요)</span></div>
-    <div class="dz elec" id="dzElec"><b>전자시간표 불러와서 수정</b><span id="elecName">이미 만든 전자시간표 .xlsx<br>(코드표를 먼저 넣으면 이름으로 보여요)</span></div>
+    <div class="dz req" id="dzPlan"><em class="tag">필수</em><b>HRD운영계획서 (.xls / .xlsx)</b><span id="planName">여기에 끌어 놓거나 눌러서 고르세요</span></div>
+    <div class="dz req" id="dzCodes"><em class="tag">필수</em><b>코드표 (.xlsx)</b><span id="codeName">여기에 끌어 놓거나 눌러서 고르세요</span></div>
+    <div class="dz opt" id="dzLoad" onclick="document.getElementById('btnLoad').click()"><em class="tag">선택</em><b>이어서 수정하기</b><span>④ '편성 저장'으로 받은 .json 파일<br>(처음 편성할 때는 필요 없어요)</span></div>
+    <div class="dz opt elec" id="dzElec"><em class="tag">선택</em><b>전자시간표 불러와서 수정</b><span id="elecName">이미 만든 전자시간표 .xlsx<br>(코드표를 먼저 넣으면 이름으로 보여요)</span></div>
   </div>
-  <p class="hint">전자시간표만 넣어도 미리보기·드래그 수정·①②③ 내려받기가 됩니다. 운영계획서를 먼저 넣으면 교과목 구분·NCS 능력단위·평가방법(재량교과 제외)까지 그대로 맞춰집니다.</p>
+  <p class="hint">필수: HRD운영계획서·코드표 · 선택: 이어서 수정하기(.json), 전자시간표 불러오기. 전자시간표만 넣어도 미리보기·드래그 수정·①②③ 내려받기가 됩니다. HRD운영계획서를 함께 넣으면 교과목 구분·NCS 능력단위·평가방법(재량교과 제외)까지 그대로 맞춰집니다.</p>
   <input type="file" id="fPlan" accept=".xls,.xlsx" hidden><input type="file" id="fCodes" accept=".xlsx,.xls" hidden><input type="file" id="fJson" accept=".json" hidden><input type="file" id="fElec" accept=".xlsx,.xls" hidden><button id="btnLoad" hidden></button>
 </section>
 
@@ -127,7 +172,7 @@ table.week.flash caption{background:#fff3cd}
   <div id="planInfo"></div>
   <div class="grid">
     <div><label class="f">개강일</label><input type="date" id="start"></div>
-    <div><label class="f">점심 위치</label><select id="lunch"><option value="4">4교시 뒤 (4교시 12:00-12:50, 점심 12:50-13:40)</option><option value="3">3교시 뒤 (점심 11:50-12:40, 4교시 12:40-13:30)</option></select></div>
+    <div><label class="f">점심 위치</label><select id="lunch"><option value="4">4교시 뒤 (4교시 12:00-12:50, 점심 13:00-13:40)</option><option value="3">3교시 뒤 (점심 12:00-12:40, 4교시 12:40-13:30)</option></select></div>
     <div><label class="f">강의실</label><select id="room"></select></div>
     <div><label class="f">편성 방식</label><select id="mode"><option value="seq">시간순 (교과목 순서대로)</option><option value="split">오전·오후 나눠서</option></select>
       <div class="split-row" style="margin-top:6px"><label><input type="checkbox" id="spill" checked> 한쪽이 먼저 끝나면 남은 칸을 다른 쪽 과목으로 채우기</label></div></div>
@@ -185,8 +230,8 @@ table.week.flash caption{background:#fff3cd}
       <section><h2>교사별 시간</h2><table id="tTotals"></table></section>
       <section><h2>내려받기</h2><div class="dl">
         <button class="btn" id="btnElec">① 전자시간표 (HRD 업로드용)<small>샘플과 같은 서식</small></button>
-        <button class="btn" id="btnPrint">② 출력용시간표<small>한 장에 한 주(월~금), 수업 없는 날 회색, 아래쪽에 주차 표시</small></button>
-        <button class="btn" id="btnEval">③ 평가일정 (평가날출력-4번)<small>성적 파일 B~W열에 값 붙여넣기</small></button>
+        <button class="btn ghost" id="btnPrint">② 출력용시간표<small>한 장에 한 주(월~금), 수업 없는 날 회색, 아래쪽에 주차 표시</small></button>
+        <button class="btn ghost" id="btnEval">③ 평가일정 (평가날출력-4번)<small>성적 파일 B~W열에 값 붙여넣기</small></button>
         <button class="btn ghost" id="btnJson">편성 저장 (.json)<small>나중에 불러와서 이어서 수정</small></button>
       </div></section>
     </div>
