@@ -35,7 +35,7 @@ td.num{text-align:right}
 .code{font-size:11.5px;color:var(--sub);word-break:break-all}.code.miss{color:var(--warn);font-weight:600}
 .sw{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:6px;vertical-align:-1px;border:1px solid #0002}
 #planInfo,#codeWarn,#summary{margin:6px 0 10px;color:var(--sub)}
-#codeWarn{font-size:12.5px}.wkend{margin-left:8px;padding-left:8px;border-left:1px solid #ccd3df}.wkend label{color:#b0412e}#codeWarn .bbtn{margin-left:6px}
+#codeWarn{font-size:12.5px}.wkend{margin-top:4px}.wkend label{color:#b0412e}.wkend small{color:var(--sub)}#codeWarn .bbtn{margin-left:6px}
 #cmapPanel{border:1px solid #dde3ec;border-radius:8px;padding:10px 12px;margin:6px 0 10px;background:#fafbfd}#cmapPanel details{margin:6px 0}
 table.cmap{width:auto;min-width:760px;font-size:12.5px;margin-top:4px}table.cmap td{padding:3px 8px}table.cmap select{max-width:460px}tr.cmMiss td:first-child{color:#c0392b;font-weight:bold}
 .cm{display:inline-block;font-size:11px;border-radius:3px;padding:0 5px}.cm-s{background:#d4f0d4;color:#1d5a1d}.cm-a{background:#dbe8ff;color:#1c3f86}.cm-m{background:#ead9fb;color:#5b2a8c}.cm-x{background:#fbdcdc;color:#9b1c1c}
@@ -170,7 +170,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       <label><input type="checkbox" class="pchk" value="5">5</label><label><input type="checkbox" class="pchk" value="6">6</label><label><input type="checkbox" class="pchk" value="7">7</label><label><input type="checkbox" class="pchk" value="8">8</label></div></div>
     <div><label class="f">여유 칸</label><label><input type="checkbox" id="extra" checked> 체크한 교시의 앞뒤 1교시를 여유 칸으로 보이기<br><small style="color:var(--sub)">자동 편성은 비워 두고, 자투리 시간을 드래그로 옮길 때 씁니다</small></label></div>
     <div><label class="f">수업 요일</label><div class="chks">
-      <label><input type="checkbox" class="wchk" value="1" checked>월</label><label><input type="checkbox" class="wchk" value="2" checked>화</label><label><input type="checkbox" class="wchk" value="3" checked>수</label><label><input type="checkbox" class="wchk" value="4" checked>목</label><label><input type="checkbox" class="wchk" value="5" checked>금</label><span class="wkend"><label><input type="checkbox" class="wchk" value="6">토</label><label><input type="checkbox" class="wchk" value="0">일</label></span></div></div>
+      <label><input type="checkbox" class="wchk" value="1" checked>월</label><label><input type="checkbox" class="wchk" value="2" checked>화</label><label><input type="checkbox" class="wchk" value="3" checked>수</label><label><input type="checkbox" class="wchk" value="4" checked>목</label><label><input type="checkbox" class="wchk" value="5" checked>금</label></div><div class="chks wkend"><label><input type="checkbox" class="wchk" value="6">토</label><label><input type="checkbox" class="wchk" value="0">일</label> <small>주말반·주말 수업</small></div></div>
     <div><label class="f">평가일정용 과정번호 · 과정구분</label><div style="display:flex;gap:6px"><input type="text" id="courseNo" placeholder="과정번호" style="width:40%"><input type="text" id="courseType" value="일반" style="width:60%"></div></div>
   </div>
   <div class="bulk"><b>일괄 등록</b> — 왼쪽 칸에서 과목을 체크한 뒤
@@ -415,7 +415,7 @@ function parseCodes(rows) {
 /* ---------- 과목 표 (설정) ---------- */
 function buildSubjects() {
   const p = S.plan;
-  p.raw = { t: [...p.teachers], r: [...p.rooms] };
+  p.raw = { t: [...new Set([...p.teachers, ...p.subjects.flatMap(s => s.teachers || [])])].filter(Boolean), r: [...p.rooms] };
   S.subjects = p.subjects.map((s, i) => ({
     ...s, idx: i,
     teacher: s.teachers[0] || p.teachers[0] || '',
@@ -459,7 +459,9 @@ function findCode(cat, name) {
   const n = rNo(name); if (n) { e = E.filter(x => rNo(x.name) === n); if (e.length === 1) return { e: e[0], how: '자동(호수)' }; }
   return null;
 }
-const canonName = (cat, name) => { const f = findCode(cat, name); return f ? f.e.name : name; };
+// 같은 코드를 가리키는 이름은 하나로: 운영계획서에 있는 이름을 먼저 쓰고, 운영계획서에 없으면 코드표 이름
+const planNameFor = (cat, code) => ((S.plan && S.plan.raw && S.plan.raw[cat]) || []).find(r => { const f = findCode(cat, r); return f && f.e.code === code; });
+const canonName = (cat, name) => { const f = findCode(cat, name); return f ? (planNameFor(cat, f.e.code) || f.e.name) : name; };
 const subjCodeOf = s => { const f = findCode('s', s.name) || (s.unit && s.unit !== s.name ? findCode('s', s.unit) : null); return f ? f.e.code : ''; };
 // 이름 하나를 앱 전체에서 다른 이름으로 바꿈 (운영계획서 이름 → 코드표 이름)
 function replaceName(cat, from, to) {
@@ -480,12 +482,12 @@ function replaceName(cat, from, to) {
     const rv = $('#room').value; if (rv === from) { if (![...$('#room').options].some(o => o.value === to)) $('#room').insertAdjacentHTML('beforeend', `<option>${esc(to)}</option>`); $('#room').value = to; }
   }
 }
-// 운영계획서에서 읽은 이름(raw)을 모두 코드표 이름으로 통일 + 교과목 코드 다시 찾기
+// 앱 안의 모든 교사·강의실 이름을 하나로 통일(운영계획서 이름 우선) + 교과목 코드 다시 찾기
 function canonAll() {
   if (!S.plan || !S.codes) return;
   const raw = S.plan.raw || (S.plan.raw = { t: [...(S.plan.teachers || [])], r: [...(S.plan.rooms || [])] });
-  const usedT = new Set([...(raw.t || []), ...(S.subjects || []).flatMap(s => [...(s.teachers || []), ...splitOf(s).map(x => x.t)])]);
-  const usedR = new Set([...(raw.r || []), ...(S.subjects || []).map(s => s.room).filter(Boolean)]);
+  const usedT = new Set([...(raw.t || []), ...(S.subjects || []).flatMap(s => [...(s.teachers || []), ...splitOf(s).map(x => x.t)]), ...Object.values(S.lt || {}), ...(S.trules || []).map(r => r.t)].filter(Boolean));
+  const usedR = new Set([...(raw.r || []), ...(S.subjects || []).map(s => s.room), ...Object.values(S.lr || {}), $('#room').value].filter(Boolean));
   usedT.forEach(n => replaceName('t', n, canonName('t', n)));
   usedR.forEach(n => replaceName('r', n, canonName('r', n)));
   (S.subjects || []).forEach(s => s.code = subjCodeOf(s) || s.code || '');
@@ -945,6 +947,7 @@ function saveJson() {
 }
 async function loadJson(file) {
   const d = JSON.parse(await file.text());
+  S.fromElec = false;
   S.plan = d.plan; S.codes = d.codes; S.subjects = d.subjects; S.order = d.order;
   if (d.cmap) ['t', 'r', 's'].forEach(c => S.cmap[c] = { ...S.cmap[c], ...(d.cmap[c] || {}) });
   renderSetup();
@@ -964,16 +967,22 @@ async function loadJson(file) {
 function msg(t) { const m = $('#msg'); m.textContent = t; m.hidden = false; clearTimeout(msg.t); msg.t = setTimeout(() => m.hidden = true, 4500); }
 function toggleMode() { document.body.classList.toggle('split', $('#mode').value === 'split'); }
 async function onPlan(f) {
+  const keepElec = elecKept('운영계획서');
+  if (keepElec === null) return;
   try { S.plan = parsePlan(await readRows(f)); }
   catch (e) { return msg('운영계획서를 읽지 못했습니다: ' + e.message); }
   if (!S.plan.subjects.length) return msg('운영계획서에서 교과목을 찾지 못했습니다. HRD 통합심사 운영계획서 파일인지 확인해 주세요.');
   $('#planName').textContent = f.name; buildSubjects(); renderSetup();
   const r0 = $('#room').value; if (r0) { S.subjects.forEach(s => { if (!s.room) s.room = r0; }); renderSetup(); }   // 처음엔 과정 기본 강의실로 채워 둠(과목별로 바꿀 수 있음)
   S.settings = null; $('#result').hidden = true;
+  if (keepElec) await onElecImport(S.elecFile, { silent: true, why: '운영계획서' });
 }
 async function onCodes(f) {
+  const keepElec = elecKept('코드표');
+  if (keepElec === null) return;
   try { S.codes = parseCodes(await readRows(f)); } catch (e) { return msg('코드표를 읽지 못했습니다: ' + e.message); }
   $('#codeName').textContent = f.name;
+  if (keepElec) return onElecImport(S.elecFile, { silent: true, why: '코드표' });
   if (S.plan) { S.subjects.forEach(s => s.code = ''); canonAll(); renderSetup(); if (S.settings) refreshAll(false); }
   const n = unmatchedCount(); if (n) msg(`코드표에서 찾지 못한 이름이 ${n}개 있습니다. [코드 맞추기]에서 직접 골라 주세요.`);
 }
@@ -1242,7 +1251,7 @@ function renderRefInfo() {
 
 /* ---------- 편성 (고정일정 → 순서대로, 기준 시간표 피하기) ---------- */
 function generate() {
-  const st = settings();
+  const st = settings(); S.fromElec = false;
   if (!S.plan) return msg('운영계획서를 먼저 넣어 주세요.');
   if (!st.start) return msg('개강일을 입력해 주세요.');
   if (!st.periods.length) return msg('수업 교시를 하나 이상 골라 주세요.');
@@ -1422,12 +1431,20 @@ function readElec(rows) {
   });
   return { recs, other };
 }
-async function onElecImport(file) {
+// 전자시간표로 편성을 되살린 상태에서 운영계획서·코드표를 나중에 넣으면: 배치는 그대로 두고 이름만 다시 맞춤
+// 반환: true = 전자시간표 다시 맞추기, false = 평소처럼, null = 취소
+function elecKept(what) {
+  if (!S.elecFile || !S.fromElec) return false;
+  const now = JSON.stringify([S.lessons, S.lt, S.lr]);
+  if (now !== S.elecSnap && !window.confirm(`전자시간표를 불러온 뒤 고친 칸이 있습니다.\n${what}를 넣으면 전자시간표 배치로 다시 맞추면서 그 수정은 사라집니다.\n\n[확인] 전자시간표 배치로 다시 맞추기\n[취소] 넣지 않기`)) return null;
+  return true;
+}
+async function onElecImport(file, opt = {}) {
   let rows; try { rows = await readRows(file); } catch (e) { return msg('전자시간표를 읽지 못했습니다: ' + e.message); }
   if (!/훈련일자/.test(rows.slice(0, 3).flat().map(cellS).join(''))) return msg('전자시간표 형식(2행에 훈련일자·시작시간·시간구분…)이 아닙니다.');
   const { recs, other } = readElec(rows);
   if (!recs.length) return msg('전자시간표에서 수업(시간구분 1) 행을 찾지 못했습니다.');
-  if (S.settings && Object.keys(S.lessons).length && !window.confirm('지금 화면의 편성을 지우고 이 전자시간표 내용으로 바꿀까요?')) return;
+  if (!opt.silent && S.settings && Object.keys(S.lessons).length && !window.confirm('지금 화면의 편성을 지우고 이 전자시간표 내용으로 바꿀까요?')) return;
   const warn = [];
   // 점심 위치
   const lt0 = other.lunch.sort((a, b) => other.lunch.filter(x => x === b).length - other.lunch.filter(x => x === a).length)[0];
@@ -1456,6 +1473,10 @@ async function onElecImport(file) {
   // 과목: 운영계획서가 있으면 코드로 맞추고, 없거나 못 맞춘 코드는 새 과목으로
   const order = [...new Set(cells.map(c => c.sc))];
   const fromPlan = !!(S.plan && S.subjects.length && !S.plan.fromElec);
+  if (fromPlan) {   // 앞서 전자시간표에서 임시로 덧붙인 과목(코드표가 없을 때 등)은 지우고 다시 맞춤
+    S.subjects = S.subjects.filter(s => !s.elecAdded); S.plan.subjects = S.plan.subjects.filter(s => !s.elecAdded);
+    S.subjects.forEach(s => { if (!s.code) s.code = subjCodeOf(s); });
+  }
   const cnt = c => cells.filter(x => x.sc === c).length;
   if (!fromPlan) {
     S.plan = { name: elecCourseName(file.name), subjects: [], teachers: [], rooms: [], methods: {}, totalHours: 0, fromElec: true };
@@ -1469,7 +1490,8 @@ async function onElecImport(file) {
     const inf = sInfo(code), i = S.subjects.length;
     const s = { kind: inf.kind || (fromPlan ? '추가' : ''), name: inf.name, hours: cnt(code), teachers: [], ncs: '', unit: inf.name, level: '', idx: i, code,
       teacher: '', tsplit: [], method: '평가자 체크리스트', half: 'am', color: COLORS[i % COLORS.length] };
-    S.subjects.push(s); S.plan.subjects.push(s); idxOf[code] = i; if (fromPlan) added.push(inf.name);
+    if (fromPlan) { s.elecAdded = true; added.push(inf.name); }
+    S.subjects.push(s); S.plan.subjects.push(s); idxOf[code] = i;
   });
   // 과정 기본 강의실 = 가장 많이 쓴 강의실
   const most = arr => Object.entries(arr.reduce((a, v) => (v && (a[v] = (a[v] || 0) + 1), a), {})).sort((a, b) => b[1] - a[1]);
@@ -1510,6 +1532,8 @@ async function onElecImport(file) {
   const L = {}, Tt = {}, R = {};
   cells.forEach(c => { const i = idxOf[c.sc], s = S.subjects[i]; L[c.k] = i; if (c.t) Tt[c.k] = c.t; if (c.r && c.r !== subjRoom(s)) R[c.k] = c.r; });
   S.lessons = L; S.lt = Tt; S.lr = R; S.lock = {}; recalcEnd(); S.rangeEnd = S.endDate; S.edited = true; S.elecName = file.name;
+  canonAll();   // 교사·강의실 이름을 운영계획서 명칭으로(코드표 코드로 찾음)
+  S.elecFile = file; S.fromElec = true; S.elecSnap = JSON.stringify([S.lessons, S.lt, S.lr]);
   buildDays(); checkCodes(); refreshAll(true);
   // 알림
   const hol = days.filter(d => S.holidays[d]);
@@ -1520,7 +1544,7 @@ async function onElecImport(file) {
   if (hol.length) warn.push(`공휴일 목록에 있는 날 수업 ${hol.length}일 (${hol.slice(0, 2).join(', ')})`);
   if (other.vac) warn.push(`방학/원격 'N'이 아닌 행 ${other.vac}개 — 다시 내려받으면 'N'으로 나감`);
   S.importWarn = warn;
-  msg(`전자시간표를 불러왔습니다: ${days.length}일 · ${cells.length}시간 · 교과목 ${order.length}개 · 강의실 ${rAll.length}곳 · 점심 ${la}교시 뒤${warn.length ? ' · ⚠ ' + warn.join(' / ') : ''}`);
+  msg(`${opt.why ? `${opt.why}를 넣고 전자시간표 배치는 그대로 두었습니다(이름만 운영계획서 기준) — ` : ''}전자시간표를 불러왔습니다: ${days.length}일 · ${cells.length}시간 · 교과목 ${order.length}개 · 강의실 ${rAll.length}곳 · 점심 ${la}교시 뒤${warn.length ? ' · ⚠ ' + warn.join(' / ') : ''}`);
   if (warn.length) setTimeout(() => msg('⚠ ' + warn.join(' / ')), 4600);
 }
 

@@ -185,7 +185,7 @@ function parseCodes(rows) {
 /* ---------- 과목 표 (설정) ---------- */
 function buildSubjects() {
   const p = S.plan;
-  p.raw = { t: [...p.teachers], r: [...p.rooms] };
+  p.raw = { t: [...new Set([...p.teachers, ...p.subjects.flatMap(s => s.teachers || [])])].filter(Boolean), r: [...p.rooms] };
   S.subjects = p.subjects.map((s, i) => ({
     ...s, idx: i,
     teacher: s.teachers[0] || p.teachers[0] || '',
@@ -229,7 +229,9 @@ function findCode(cat, name) {
   const n = rNo(name); if (n) { e = E.filter(x => rNo(x.name) === n); if (e.length === 1) return { e: e[0], how: '자동(호수)' }; }
   return null;
 }
-const canonName = (cat, name) => { const f = findCode(cat, name); return f ? f.e.name : name; };
+// 같은 코드를 가리키는 이름은 하나로: 운영계획서에 있는 이름을 먼저 쓰고, 운영계획서에 없으면 코드표 이름
+const planNameFor = (cat, code) => ((S.plan && S.plan.raw && S.plan.raw[cat]) || []).find(r => { const f = findCode(cat, r); return f && f.e.code === code; });
+const canonName = (cat, name) => { const f = findCode(cat, name); return f ? (planNameFor(cat, f.e.code) || f.e.name) : name; };
 const subjCodeOf = s => { const f = findCode('s', s.name) || (s.unit && s.unit !== s.name ? findCode('s', s.unit) : null); return f ? f.e.code : ''; };
 // 이름 하나를 앱 전체에서 다른 이름으로 바꿈 (운영계획서 이름 → 코드표 이름)
 function replaceName(cat, from, to) {
@@ -250,12 +252,12 @@ function replaceName(cat, from, to) {
     const rv = $('#room').value; if (rv === from) { if (![...$('#room').options].some(o => o.value === to)) $('#room').insertAdjacentHTML('beforeend', `<option>${esc(to)}</option>`); $('#room').value = to; }
   }
 }
-// 운영계획서에서 읽은 이름(raw)을 모두 코드표 이름으로 통일 + 교과목 코드 다시 찾기
+// 앱 안의 모든 교사·강의실 이름을 하나로 통일(운영계획서 이름 우선) + 교과목 코드 다시 찾기
 function canonAll() {
   if (!S.plan || !S.codes) return;
   const raw = S.plan.raw || (S.plan.raw = { t: [...(S.plan.teachers || [])], r: [...(S.plan.rooms || [])] });
-  const usedT = new Set([...(raw.t || []), ...(S.subjects || []).flatMap(s => [...(s.teachers || []), ...splitOf(s).map(x => x.t)])]);
-  const usedR = new Set([...(raw.r || []), ...(S.subjects || []).map(s => s.room).filter(Boolean)]);
+  const usedT = new Set([...(raw.t || []), ...(S.subjects || []).flatMap(s => [...(s.teachers || []), ...splitOf(s).map(x => x.t)]), ...Object.values(S.lt || {}), ...(S.trules || []).map(r => r.t)].filter(Boolean));
+  const usedR = new Set([...(raw.r || []), ...(S.subjects || []).map(s => s.room), ...Object.values(S.lr || {}), $('#room').value].filter(Boolean));
   usedT.forEach(n => replaceName('t', n, canonName('t', n)));
   usedR.forEach(n => replaceName('r', n, canonName('r', n)));
   (S.subjects || []).forEach(s => s.code = subjCodeOf(s) || s.code || '');
@@ -715,6 +717,7 @@ function saveJson() {
 }
 async function loadJson(file) {
   const d = JSON.parse(await file.text());
+  S.fromElec = false;
   S.plan = d.plan; S.codes = d.codes; S.subjects = d.subjects; S.order = d.order;
   if (d.cmap) ['t', 'r', 's'].forEach(c => S.cmap[c] = { ...S.cmap[c], ...(d.cmap[c] || {}) });
   renderSetup();
@@ -734,16 +737,22 @@ async function loadJson(file) {
 function msg(t) { const m = $('#msg'); m.textContent = t; m.hidden = false; clearTimeout(msg.t); msg.t = setTimeout(() => m.hidden = true, 4500); }
 function toggleMode() { document.body.classList.toggle('split', $('#mode').value === 'split'); }
 async function onPlan(f) {
+  const keepElec = elecKept('운영계획서');
+  if (keepElec === null) return;
   try { S.plan = parsePlan(await readRows(f)); }
   catch (e) { return msg('운영계획서를 읽지 못했습니다: ' + e.message); }
   if (!S.plan.subjects.length) return msg('운영계획서에서 교과목을 찾지 못했습니다. HRD 통합심사 운영계획서 파일인지 확인해 주세요.');
   $('#planName').textContent = f.name; buildSubjects(); renderSetup();
   const r0 = $('#room').value; if (r0) { S.subjects.forEach(s => { if (!s.room) s.room = r0; }); renderSetup(); }   // 처음엔 과정 기본 강의실로 채워 둠(과목별로 바꿀 수 있음)
   S.settings = null; $('#result').hidden = true;
+  if (keepElec) await onElecImport(S.elecFile, { silent: true, why: '운영계획서' });
 }
 async function onCodes(f) {
+  const keepElec = elecKept('코드표');
+  if (keepElec === null) return;
   try { S.codes = parseCodes(await readRows(f)); } catch (e) { return msg('코드표를 읽지 못했습니다: ' + e.message); }
   $('#codeName').textContent = f.name;
+  if (keepElec) return onElecImport(S.elecFile, { silent: true, why: '코드표' });
   if (S.plan) { S.subjects.forEach(s => s.code = ''); canonAll(); renderSetup(); if (S.settings) refreshAll(false); }
   const n = unmatchedCount(); if (n) msg(`코드표에서 찾지 못한 이름이 ${n}개 있습니다. [코드 맞추기]에서 직접 골라 주세요.`);
 }

@@ -232,7 +232,7 @@ function renderRefInfo() {
 
 /* ---------- 편성 (고정일정 → 순서대로, 기준 시간표 피하기) ---------- */
 function generate() {
-  const st = settings();
+  const st = settings(); S.fromElec = false;
   if (!S.plan) return msg('운영계획서를 먼저 넣어 주세요.');
   if (!st.start) return msg('개강일을 입력해 주세요.');
   if (!st.periods.length) return msg('수업 교시를 하나 이상 골라 주세요.');
@@ -412,12 +412,20 @@ function readElec(rows) {
   });
   return { recs, other };
 }
-async function onElecImport(file) {
+// 전자시간표로 편성을 되살린 상태에서 운영계획서·코드표를 나중에 넣으면: 배치는 그대로 두고 이름만 다시 맞춤
+// 반환: true = 전자시간표 다시 맞추기, false = 평소처럼, null = 취소
+function elecKept(what) {
+  if (!S.elecFile || !S.fromElec) return false;
+  const now = JSON.stringify([S.lessons, S.lt, S.lr]);
+  if (now !== S.elecSnap && !window.confirm(`전자시간표를 불러온 뒤 고친 칸이 있습니다.\n${what}를 넣으면 전자시간표 배치로 다시 맞추면서 그 수정은 사라집니다.\n\n[확인] 전자시간표 배치로 다시 맞추기\n[취소] 넣지 않기`)) return null;
+  return true;
+}
+async function onElecImport(file, opt = {}) {
   let rows; try { rows = await readRows(file); } catch (e) { return msg('전자시간표를 읽지 못했습니다: ' + e.message); }
   if (!/훈련일자/.test(rows.slice(0, 3).flat().map(cellS).join(''))) return msg('전자시간표 형식(2행에 훈련일자·시작시간·시간구분…)이 아닙니다.');
   const { recs, other } = readElec(rows);
   if (!recs.length) return msg('전자시간표에서 수업(시간구분 1) 행을 찾지 못했습니다.');
-  if (S.settings && Object.keys(S.lessons).length && !window.confirm('지금 화면의 편성을 지우고 이 전자시간표 내용으로 바꿀까요?')) return;
+  if (!opt.silent && S.settings && Object.keys(S.lessons).length && !window.confirm('지금 화면의 편성을 지우고 이 전자시간표 내용으로 바꿀까요?')) return;
   const warn = [];
   // 점심 위치
   const lt0 = other.lunch.sort((a, b) => other.lunch.filter(x => x === b).length - other.lunch.filter(x => x === a).length)[0];
@@ -446,6 +454,10 @@ async function onElecImport(file) {
   // 과목: 운영계획서가 있으면 코드로 맞추고, 없거나 못 맞춘 코드는 새 과목으로
   const order = [...new Set(cells.map(c => c.sc))];
   const fromPlan = !!(S.plan && S.subjects.length && !S.plan.fromElec);
+  if (fromPlan) {   // 앞서 전자시간표에서 임시로 덧붙인 과목(코드표가 없을 때 등)은 지우고 다시 맞춤
+    S.subjects = S.subjects.filter(s => !s.elecAdded); S.plan.subjects = S.plan.subjects.filter(s => !s.elecAdded);
+    S.subjects.forEach(s => { if (!s.code) s.code = subjCodeOf(s); });
+  }
   const cnt = c => cells.filter(x => x.sc === c).length;
   if (!fromPlan) {
     S.plan = { name: elecCourseName(file.name), subjects: [], teachers: [], rooms: [], methods: {}, totalHours: 0, fromElec: true };
@@ -459,7 +471,8 @@ async function onElecImport(file) {
     const inf = sInfo(code), i = S.subjects.length;
     const s = { kind: inf.kind || (fromPlan ? '추가' : ''), name: inf.name, hours: cnt(code), teachers: [], ncs: '', unit: inf.name, level: '', idx: i, code,
       teacher: '', tsplit: [], method: '평가자 체크리스트', half: 'am', color: COLORS[i % COLORS.length] };
-    S.subjects.push(s); S.plan.subjects.push(s); idxOf[code] = i; if (fromPlan) added.push(inf.name);
+    if (fromPlan) { s.elecAdded = true; added.push(inf.name); }
+    S.subjects.push(s); S.plan.subjects.push(s); idxOf[code] = i;
   });
   // 과정 기본 강의실 = 가장 많이 쓴 강의실
   const most = arr => Object.entries(arr.reduce((a, v) => (v && (a[v] = (a[v] || 0) + 1), a), {})).sort((a, b) => b[1] - a[1]);
@@ -500,6 +513,8 @@ async function onElecImport(file) {
   const L = {}, Tt = {}, R = {};
   cells.forEach(c => { const i = idxOf[c.sc], s = S.subjects[i]; L[c.k] = i; if (c.t) Tt[c.k] = c.t; if (c.r && c.r !== subjRoom(s)) R[c.k] = c.r; });
   S.lessons = L; S.lt = Tt; S.lr = R; S.lock = {}; recalcEnd(); S.rangeEnd = S.endDate; S.edited = true; S.elecName = file.name;
+  canonAll();   // 교사·강의실 이름을 운영계획서 명칭으로(코드표 코드로 찾음)
+  S.elecFile = file; S.fromElec = true; S.elecSnap = JSON.stringify([S.lessons, S.lt, S.lr]);
   buildDays(); checkCodes(); refreshAll(true);
   // 알림
   const hol = days.filter(d => S.holidays[d]);
@@ -510,7 +525,7 @@ async function onElecImport(file) {
   if (hol.length) warn.push(`공휴일 목록에 있는 날 수업 ${hol.length}일 (${hol.slice(0, 2).join(', ')})`);
   if (other.vac) warn.push(`방학/원격 'N'이 아닌 행 ${other.vac}개 — 다시 내려받으면 'N'으로 나감`);
   S.importWarn = warn;
-  msg(`전자시간표를 불러왔습니다: ${days.length}일 · ${cells.length}시간 · 교과목 ${order.length}개 · 강의실 ${rAll.length}곳 · 점심 ${la}교시 뒤${warn.length ? ' · ⚠ ' + warn.join(' / ') : ''}`);
+  msg(`${opt.why ? `${opt.why}를 넣고 전자시간표 배치는 그대로 두었습니다(이름만 운영계획서 기준) — ` : ''}전자시간표를 불러왔습니다: ${days.length}일 · ${cells.length}시간 · 교과목 ${order.length}개 · 강의실 ${rAll.length}곳 · 점심 ${la}교시 뒤${warn.length ? ' · ⚠ ' + warn.join(' / ') : ''}`);
   if (warn.length) setTimeout(() => msg('⚠ ' + warn.join(' / ')), 4600);
 }
 
