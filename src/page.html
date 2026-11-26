@@ -35,7 +35,11 @@ td.num{text-align:right}
 .code{font-size:11.5px;color:var(--sub);word-break:break-all}.code.miss{color:var(--warn);font-weight:600}
 .sw{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:6px;vertical-align:-1px;border:1px solid #0002}
 #planInfo,#codeWarn,#summary{margin:6px 0 10px;color:var(--sub)}
-#codeWarn{font-size:12.5px}
+#codeWarn{font-size:12.5px}#codeWarn .bbtn{margin-left:6px}
+#cmapPanel{border:1px solid #dde3ec;border-radius:8px;padding:10px 12px;margin:6px 0 10px;background:#fafbfd}#cmapPanel details{margin:6px 0}
+table.cmap{width:auto;min-width:760px;font-size:12.5px;margin-top:4px}table.cmap td{padding:3px 8px}table.cmap select{max-width:460px}tr.cmMiss td:first-child{color:#c0392b;font-weight:bold}
+.cm{display:inline-block;font-size:11px;border-radius:3px;padding:0 5px}.cm-s{background:#d4f0d4;color:#1d5a1d}.cm-a{background:#dbe8ff;color:#1c3f86}.cm-m{background:#ead9fb;color:#5b2a8c}.cm-x{background:#fbdcdc;color:#9b1c1c}
+.cmapN{display:inline-block;background:#c0392b;color:#fff;border-radius:9px;font-size:11px;padding:0 6px}
 .split-only{display:none}body.split .split-only{display:table-cell}body.split .split-row{display:block}.split-row{display:none}
 .layout{display:grid;grid-template-columns:1fr 290px;gap:16px;align-items:start}
 #preview{max-height:780px;overflow:auto;padding-right:4px}
@@ -138,6 +142,7 @@ table.week.flash caption{background:#fff3cd}
     <span>강의실 <select id="bR"></select> <button type="button" class="bbtn" id="bRgo">체크한 과목에 강의실 넣기</button></span></div>
   <table><thead><tr><th><input type="checkbox" id="bAll" title="전체 선택"></th><th>순서</th><th>구분</th><th>교과목</th><th>NCS 능력단위</th><th>시간</th><th>교사</th><th>강의실</th><th class="split-only">오전/오후</th><th>교과목 코드</th></tr></thead><tbody id="subjBody"></tbody></table>
   <div id="codeWarn"></div>
+  <div id="cmapPanel" hidden></div>
   <div class="tools">
     <button type="button" class="bbtn" id="btnOrder">세부설정 (편성 순서) ▾</button>
     <button type="button" class="bbtn" id="btnRules" title="과목·요일·오전/오후별로 맡을 교사를 정함">교사 규칙 ▾</button>

@@ -181,24 +181,89 @@ function parseCodes(rows) {
 
 /* ---------- 과목 표 (설정) ---------- */
 function buildSubjects() {
-  const p = S.plan, cd = S.codes || { teachers: {}, rooms: [], subjects: {} };
+  const p = S.plan;
+  p.raw = { t: [...p.teachers], r: [...p.rooms] };
   S.subjects = p.subjects.map((s, i) => ({
     ...s, idx: i,
     teacher: s.teachers[0] || p.teachers[0] || '',
     tsplit: [{ t: s.teachers[0] || p.teachers[0] || '', h: s.hours }],
-    code: cd.subjects[norm(s.name)] || '',
+    code: '',
     method: (k => k === undefined ? '평가자 체크리스트' : p.methods[k])([norm(s.unit), norm(s.name)].find(k => k in p.methods)),
     half: i < Math.ceil(p.subjects.length / 2) ? 'am' : 'pm', color: COLORS[i % COLORS.length]
   }));
   S.order = S.subjects.map(s => s.idx); S.orderPm = null; S.trules = []; S.manT = {}; S.subst = {};
+  canonAll();
 }
 const COLORS = ['#cfe2ff', '#ffe0c2', '#d4f0d4', '#f5d0e6', '#fff1b8', '#d9d2f5', '#c9eef0', '#f2d6c9', '#e2e8c0', '#f0c8c8'];
-const roomCode = name => { const r = (S.codes?.rooms || []).find(x => x.name.startsWith(name) || name.startsWith(x.name)); return r ? r.code : ''; };
+/* ---------- 코드 맞추기: 코드표가 기준 ----------
+   전자시간표에는 코드표의 코드만 들어가므로, 운영계획서 이름을 코드표 항목에 맞춰 둠.
+   찾는 순서: 직접 지정(S.cmap) → 이름 같음 → 정리한 이름 같음 → (강의실) 앞부분 같음 → (강의실) 건물·호수 같음
+   직접 지정은 브라우저에 저장해 다음 과정에서도 그대로 씀 */
+const CMAP_KEY = 'tt_codemap_v1';
+const loadCmap = () => { try { const m = JSON.parse(localStorage.getItem(CMAP_KEY) || '{}'); return { t: m.t || {}, r: m.r || {}, s: m.s || {} }; } catch (e) { return { t: {}, r: {}, s: {} }; } };
+const saveCmap = () => { try { localStorage.setItem(CMAP_KEY, JSON.stringify(S.cmap)); } catch (e) { /* 저장 못 해도 이번 작업엔 문제없음 */ } };
+const kT = x => String(x || '').replace(/\[.*?\]/g, '').replace(/_.*$/, '').replace(/\s+/g, '');
+const kR = x => String(x || '').replace(/^\s*\(\d+\)\s*/, '').replace(/_.*$/, '').replace(/\(.*?\)/g, '').replace(/[\s·.,-]+/g, '');
+const rNo = x => (String(x || '').replace(/^\s*\(\d+\)/, '').replace(/_.*$/, '').match(/\d+(?=\s*호)/g) || []).join('-');
+const codeEntries = cat => {
+  const C = S.codes; if (!C) return [];
+  if (cat === 't') return Object.entries(C.teachers).map(([name, code]) => ({ name, code }));
+  if (cat === 'r') return C.rooms;
+  return C.subjList && C.subjList.length ? C.subjList : Object.entries(C.subjects).map(([name, code]) => ({ name, code }));
+};
+function findCode(cat, name) {
+  if (!name || !S.codes) return null;
+  const E = codeEntries(cat), man = ((S.cmap || {})[cat] || {})[name];
+  if (man === '-') return null;                                                     // '코드표에 없음'으로 직접 정함
+  if (man) { const e = E.find(x => x.code === man); if (e) return { e, how: '직접' }; }
+  let e = E.find(x => x.name === name) || E.find(x => x.code === name);
+  if (e) return { e, how: '같음' };
+  if (cat === 't') { e = E.filter(x => kT(x.name) === kT(name)); return e.length === 1 ? { e: e[0], how: '자동' } : null; }
+  if (cat === 's') { e = E.filter(x => norm(x.name) === norm(name)); return e.length === 1 ? { e: e[0], how: '자동' } : null; }
+  const k = kR(name); if (!k) return null;
+  e = E.filter(x => kR(x.name) === k); if (e.length === 1) return { e: e[0], how: '자동' };
+  e = E.filter(x => kR(x.name).startsWith(k) || k.startsWith(kR(x.name))); if (e.length === 1) return { e: e[0], how: '자동' };
+  const n = rNo(name); if (n) { e = E.filter(x => rNo(x.name) === n); if (e.length === 1) return { e: e[0], how: '자동(호수)' }; }
+  return null;
+}
+const canonName = (cat, name) => { const f = findCode(cat, name); return f ? f.e.name : name; };
+const subjCodeOf = s => { const f = findCode('s', s.name) || (s.unit && s.unit !== s.name ? findCode('s', s.unit) : null); return f ? f.e.code : ''; };
+// 이름 하나를 앱 전체에서 다른 이름으로 바꿈 (운영계획서 이름 → 코드표 이름)
+function replaceName(cat, from, to) {
+  if (!from || from === to) return;
+  const sw = v => v === from ? to : v, uniq = a => [...new Set(a.map(sw))].filter(Boolean);
+  if (cat === 't') {
+    if (S.plan) S.plan.teachers = uniq(S.plan.teachers || []);
+    (S.subjects || []).forEach(s => {
+      s.teachers = uniq(s.teachers || []); s.teacher = sw(s.teacher);
+      if (s.tsplit) { const m = []; s.tsplit.forEach(x => { x.t = sw(x.t); const o = m.find(y => y.t === x.t); if (o) o.h += +x.h || 0; else m.push(x); }); s.tsplit = m; }
+    });
+    Object.keys(S.lt || {}).forEach(k => S.lt[k] = sw(S.lt[k]));
+    (S.trules || []).forEach(r => r.t = sw(r.t));
+  } else {
+    if (S.plan) S.plan.rooms = uniq(S.plan.rooms || []);
+    (S.subjects || []).forEach(s => { if (s.room) s.room = sw(s.room); });
+    Object.keys(S.lr || {}).forEach(k => S.lr[k] = sw(S.lr[k]));
+    const rv = $('#room').value; if (rv === from) { if (![...$('#room').options].some(o => o.value === to)) $('#room').insertAdjacentHTML('beforeend', `<option>${esc(to)}</option>`); $('#room').value = to; }
+  }
+}
+// 운영계획서에서 읽은 이름(raw)을 모두 코드표 이름으로 통일 + 교과목 코드 다시 찾기
+function canonAll() {
+  if (!S.plan || !S.codes) return;
+  const raw = S.plan.raw || (S.plan.raw = { t: [...(S.plan.teachers || [])], r: [...(S.plan.rooms || [])] });
+  const usedT = new Set([...(raw.t || []), ...(S.subjects || []).flatMap(s => [...(s.teachers || []), ...splitOf(s).map(x => x.t)])]);
+  const usedR = new Set([...(raw.r || []), ...(S.subjects || []).map(s => s.room).filter(Boolean)]);
+  usedT.forEach(n => replaceName('t', n, canonName('t', n)));
+  usedR.forEach(n => replaceName('r', n, canonName('r', n)));
+  (S.subjects || []).forEach(s => s.code = subjCodeOf(s) || s.code || '');
+}
+const roomCode = name => { const f = findCode('r', name); return f ? f.e.code : ''; };
 const allRooms = () => [...new Set([...(S.plan?.rooms || []), ...(S.codes?.rooms || []).map(r => r.name)])].filter(Boolean);
 const allTeachers = () => [...new Set([...(S.plan?.teachers || []), ...Object.keys(S.codes?.teachers || {})])].filter(Boolean);
 const subjRoom = s => (s && s.room) || $('#room').value;   // 과목에 강의실을 따로 정하지 않으면 과정 기본 강의실
-const roomShort = name => String(name || '').replace(/_DS.*$/, '').replace(/\(.*$/, '').trim();
-const teacherCode = n => (S.codes?.teachers || {})[n] || '';
+// 출력용시간표 등에 쓰는 짧은 강의실 이름: 앞의 (23) 번호, 뒤의 _코드, 괄호 설명을 뺌 (다 빠지면 원래 이름)
+const roomShort = name => { const o = String(name || '').trim(), v = o.replace(/^\(\d+\)\s*/, '').replace(/_.*$/, '').replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s+/g, ' ').trim(); return v || o; };
+const teacherCode = n => { const f = findCode('t', n); return f ? f.e.code : ''; };
 /* ---------- 한 과목을 여러 교사(최대 3명)가 나눠 맡기 ---------- */
 const MAX_T = 3;
 const splitOf = s => (s.tsplit && s.tsplit.length ? s.tsplit : [{ t: s.teacher, h: s.hours }]);
@@ -305,7 +370,10 @@ function checkCodes() {
   if (!S.codes) { $('#codeWarn').textContent = '코드표를 넣으면 강사·시설·교과목 코드가 자동으로 붙습니다.'; return; }
   S.subjects.forEach(s => { if (!s.code) miss.push(`교과목 '${s.name}'`); splitOf(s).forEach(x => { if (!teacherCode(x.t)) miss.push(`교사 '${x.t}'`); }); });
   [...new Set([$('#room').value, ...S.subjects.map(subjRoom), ...Object.values(S.lr || {})])].forEach(r => { if (!roomCode(r)) miss.push(`시설 '${r}'`); });
-  $('#codeWarn').innerHTML = miss.length ? '⚠ 코드표에서 찾지 못한 항목: ' + [...new Set(miss)].map(esc).join(', ') : '✔ 모든 코드를 찾았습니다.';
+  $('#codeWarn').innerHTML = (miss.length ? '⚠ 코드표에서 찾지 못한 항목: ' + [...new Set(miss)].map(esc).join(', ') + ' — <b>[코드 맞추기]</b>에서 직접 골라 주세요.' : '✔ 모든 코드를 찾았습니다.')
+    + ` <button type="button" class="bbtn" id="btnCmap">코드 맞추기 ▾${miss.length ? ` <span class="cmapN">${[...new Set(miss)].length}</span>` : ''}</button>`;
+  $('#btnCmap').onclick = () => { const el = $('#cmapPanel'); el.hidden = !el.hidden; renderCmap(); };
+  renderCmap();
 }
 
 /* ---------- 편성 ---------- */
@@ -627,12 +695,14 @@ async function dlEval() {
 /* ---------- 저장 / 불러오기 ---------- */
 function saveJson() {
   if (!needResult()) return;
-  const data = { version: 1, plan: S.plan, codes: S.codes, subjects: S.subjects, settings: S.settings, holidays: $('#holidays').value, lessons: S.lessons, lt: S.lt, lr: S.lr || {}, lock: S.lock || {}, order: S.order, orderPm: S.orderPm, trules: S.trules || [], manT: S.manT || {}, subst: S.subst || {}, allowOut: allowOut(), autoSub: $('#autoSub').checked, fixedRows: S.fixedRows || [], fixedName: S.fixedName || '', rangeEnd: dkey(S.rangeEnd || S.endDate), room: $('#room').value, courseNo: $('#courseNo').value, courseType: $('#courseType').value };
+  const data = { version: 1, plan: S.plan, codes: S.codes, subjects: S.subjects, settings: S.settings, holidays: $('#holidays').value, lessons: S.lessons, lt: S.lt, lr: S.lr || {}, lock: S.lock || {}, order: S.order, orderPm: S.orderPm, trules: S.trules || [], manT: S.manT || {}, subst: S.subst || {}, allowOut: allowOut(), autoSub: $('#autoSub').checked, cmap: S.cmap, fixedRows: S.fixedRows || [], fixedName: S.fixedName || '', rangeEnd: dkey(S.rangeEnd || S.endDate), room: $('#room').value, courseNo: $('#courseNo').value, courseType: $('#courseType').value };
   saveBlob(new Blob([JSON.stringify(data)], { type: 'application/json' }), `편성저장_${courseTag()}.json`);
 }
 async function loadJson(file) {
   const d = JSON.parse(await file.text());
-  S.plan = d.plan; S.codes = d.codes; S.subjects = d.subjects; S.order = d.order; renderSetup();
+  S.plan = d.plan; S.codes = d.codes; S.subjects = d.subjects; S.order = d.order;
+  if (d.cmap) ['t', 'r', 's'].forEach(c => S.cmap[c] = { ...S.cmap[c], ...(d.cmap[c] || {}) });
+  renderSetup();
   const st = d.settings;
   $('#start').value = st.start; $('#lunch').value = st.lunchAfter; $('#mode').value = st.mode; $('#spill').checked = st.spill;
   $$('.pchk').forEach(e => e.checked = st.periods.includes(+e.value)); $$('.wchk').forEach(e => e.checked = st.weekdays.includes(+e.value));
@@ -657,7 +727,8 @@ async function onPlan(f) {
 async function onCodes(f) {
   try { S.codes = parseCodes(await readRows(f)); } catch (e) { return msg('코드표를 읽지 못했습니다: ' + e.message); }
   $('#codeName').textContent = f.name;
-  if (S.plan) { S.subjects.forEach(s => s.code = S.codes.subjects[norm(s.name)] || ''); renderSetup(); if (S.settings) refreshAll(false); }
+  if (S.plan) { S.subjects.forEach(s => s.code = ''); canonAll(); renderSetup(); if (S.settings) refreshAll(false); }
+  const n = unmatchedCount(); if (n) msg(`코드표에서 찾지 못한 이름이 ${n}개 있습니다. [코드 맞추기]에서 직접 골라 주세요.`);
 }
 function bindDrop(zone, input, fn) {
   zone.addEventListener('click', () => input.click());
@@ -668,6 +739,7 @@ function bindDrop(zone, input, fn) {
 }
 window.addEventListener('DOMContentLoaded', () => {
   $('#holidays').value = DEFAULT_HOLIDAYS;
+  S.cmap = loadCmap();
   bindDrop($('#dzPlan'), $('#fPlan'), onPlan);
   bindDrop($('#dzCodes'), $('#fCodes'), onCodes);
   $('#fJson').addEventListener('change', e => e.target.files[0] && loadJson(e.target.files[0]));

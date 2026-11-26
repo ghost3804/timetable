@@ -348,6 +348,52 @@ function shiftStart() {
   msg(`편성은 그대로 두고 개강일을 ${os} → ${ns}(으)로 옮겼습니다.${Object.keys(K).length ? ` 고정 칸 ${Object.keys(K).length}개는 제자리${bumped ? `, 고정 칸을 피해 밀린 칸 ${bumped}개` : ''}.` : ''} 수료일 ${dkey(S.endDate)}`);
 }
 
+/* ---------- 코드 맞추기 화면: 못 찾은 이름은 직접 고르기 ---------- */
+function cmapRows() {
+  if (!S.codes) return { t: [], r: [], s: [] };
+  const raw = (S.plan && S.plan.raw) || { t: [], r: [] };
+  const inUseT = (S.subjects || []).flatMap(s => [...(s.teachers || []), ...splitOf(s).map(x => x.t)]).concat(Object.values(S.lt || {}));
+  const inUseR = (S.subjects || []).map(s => s.room).concat(Object.values(S.lr || {}), [$('#room').value]);
+  // 운영계획서 이름을 먼저, 그다음 지금 쓰이는데 코드표에서 못 찾은 이름
+  const rowsOf = (cat, rawL, used) => { const out = [...new Set(rawL.filter(Boolean))];
+    used.filter(Boolean).forEach(n => { if (!out.includes(n) && !findCode(cat, n) && !out.some(o => canonName(cat, o) === n)) out.push(n); });
+    return out; };
+  return { t: rowsOf('t', raw.t || [], inUseT), r: rowsOf('r', raw.r || [], inUseR), s: (S.subjects || []).map(s => s.name) };
+}
+const unmatchedCount = () => { const R = cmapRows(); return ['t', 'r'].reduce((a, c) => a + R[c].filter(n => !findCode(c, n)).length, 0) + (S.subjects || []).filter(s => !s.code).length; };
+function renderCmap() {
+  const el = $('#cmapPanel'); if (!el || el.hidden) return;
+  if (!S.codes) { el.innerHTML = '<p class="hint">코드표를 넣으면 운영계획서의 교사·강의실·교과목 이름을 코드표 항목과 맞춥니다.</p>'; return; }
+  const R = cmapRows(), TITLE = { t: '교사', r: '강의실', s: '교과목(능력단위)' };
+  const badge = f => f ? `<span class="cm ${f.how === '직접' ? 'cm-m' : f.how === '같음' ? 'cm-s' : 'cm-a'}">${f.how}</span>` : '<span class="cm cm-x">못 찾음</span>';
+  const opts = (cat, f) => `<option value="-"${f ? '' : ' selected'}>— 코드표에 없음 —</option>` + codeEntries(cat).map(e => `<option value="${esc(e.code)}"${f && f.e.code === e.code ? ' selected' : ''}>${esc(e.name)} · ${esc(e.code)}</option>`).join('');
+  const table = cat => { const rows = R[cat].map(n => { const f = cat === 's' ? (k => findCode('s', k))(n) || (S.subjects.find(s => s.name === n && s.code) ? { e: { code: S.subjects.find(s => s.name === n).code }, how: '같음' } : null) : findCode(cat, n);
+      return `<tr class="${f ? '' : 'cmMiss'}"><td>${esc(n)}</td><td><select class="cmSel" data-c="${cat}" data-n="${esc(n)}">${opts(cat, f)}</select></td><td>${badge(f)}${(S.cmap[cat] || {})[n] !== undefined ? ` <button type="button" class="obtn cmAuto" data-c="${cat}" data-n="${esc(n)}" title="직접 고른 것을 지우고 자동으로 찾기">자동으로</button>` : ''}</td></tr>`; }).join('');
+    const miss = R[cat].filter(n => cat === 's' ? !(S.subjects.find(s => s.name === n) || {}).code : !findCode(cat, n)).length;
+    return `<details${miss ? ' open' : ''}><summary><b>${TITLE[cat]}</b> ${R[cat].length}개 ${miss ? `<span class="cmapN">못 찾음 ${miss}</span>` : '<span class="cm cm-s">모두 찾음</span>'}</summary>
+      <table class="cmap"><thead><tr><th>${cat === 's' ? '교과목(운영계획서)' : '운영계획서·시간표에 쓰인 이름'}</th><th>코드표 항목 (이름 · 코드)</th><th>상태</th></tr></thead><tbody>${rows || '<tr><td colspan="3" class="hint">없음</td></tr>'}</tbody></table></details>`; };
+  el.innerHTML = `<p class="hint" style="margin:0 0 6px">전자시간표에는 코드표의 코드만 들어갑니다. 운영계획서 이름이 코드표와 조금 달라도 <b>자동</b>으로 맞추고(괄호·번호·_코드·띄어쓰기 무시, 강의실은 건물·호수까지 비교), 못 찾은 것은 오른쪽에서 직접 고르세요. 직접 고른 것은 이 브라우저에 저장되어 다음 과정에서도 그대로 쓰입니다.</p>${table('r')}${table('t')}${table('s')}`;
+  $$('#cmapPanel .cmSel').forEach(sel => sel.onchange = () => setCmap(sel.dataset.c, sel.dataset.n, sel.value));
+  $$('#cmapPanel .cmAuto').forEach(b => b.onclick = () => setCmap(b.dataset.c, b.dataset.n, undefined));
+}
+function setCmap(cat, name, val) {
+  if (cat === 's') {
+    if (val === undefined) delete S.cmap.s[name]; else S.cmap.s[name] = val;
+    S.subjects.filter(s => s.name === name).forEach(s => s.code = val && val !== '-' ? val : (val === undefined ? subjCodeOf(s) : ''));
+  } else {
+    const old = canonName(cat, name);
+    if (val === undefined) delete S.cmap[cat][name]; else S.cmap[cat][name] = val;
+    const nw = canonName(cat, name);
+    replaceName(cat, old, nw);
+    if (cat === 'r' && S.plan && !S.plan.rooms.includes(nw)) S.plan.rooms.push(nw);
+    if (cat === 't' && S.plan && !S.plan.teachers.includes(nw)) S.plan.teachers.push(nw);
+  }
+  saveCmap(); if (Object.keys(S.lessons || {}).length) S.edited = true;
+  renderSetup(); if (S.settings) refreshAll(false);
+  const f = cat === 's' ? null : findCode(cat, name);
+  msg(val === undefined ? `'${name}' — 자동으로 찾기로 되돌렸습니다.` : val === '-' ? `'${name}' — 코드표에 없음으로 정했습니다.` : `'${name}' → ${f ? f.e.name + ' (' + f.e.code + ')' : val} 로 맞췄습니다.`);
+}
+
 /* ---------- 전자시간표 불러와서 수정하기 ----------
    이미 만든(또는 HRD에 올린) 전자시간표 .xlsx → 미리보기 편집기로 되살림
    - 점심 위치: 시간구분 '2' 행(11:50 → 3교시 뒤, 12:50 → 4교시 뒤) 또는 4교시 시작 시각으로 판단
