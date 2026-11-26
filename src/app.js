@@ -435,11 +435,16 @@ function renderPreview() {
   const weeks = []; let cur = [];
   // 주차 달력: 개강 주 월요일부터, 보이는 요일만(기본 월~금, 주말 고르면 토·일까지)
   const sh = showDow(), pre = []; for (let d = monOf(S.days[0]); d < S.days[0]; d = addD(d, 1)) if (sh.has(d.getDay())) pre.push(new Date(d));
-  [...pre, ...S.days].forEach(d => { if (cur.length && dkey(monOf(d)) !== dkey(monOf(cur[0]))) { weeks.push(cur); cur = []; } cur.push(d); });
+  // 주말반(토·일만 보임)은 주차가 큰 의미 없으므로 6일씩 한 표에 붙여 드래그하기 쉽게
+  const weekendOnly = [...sh].every(x => x === 0 || x === 6), per = 6;
+  if (weekendOnly) S.days.forEach(d => { if (cur.length === per) { weeks.push(cur); cur = []; } cur.push(d); });
+  else [...pre, ...S.days].forEach(d => { if (cur.length && dkey(monOf(d)) !== dkey(monOf(cur[0]))) { weeks.push(cur); cur = []; } cur.push(d); });
   if (cur.length) weeks.push(cur);
+  const w0 = monOf(S.days[0]), wOf = d => Math.round((monOf(d) - w0) / 6048e5);
+  const nTray = (S.tray || []).length;
   const sDate = S.days[0], eDate = S.endDate;
   $('#summary').innerHTML = `훈련기간 <b>${dkey(sDate)} ~ ${dkey(eDate)}</b>${S.rangeEnd && S.endDate < S.rangeEnd ? ' <span class="bad">(옮긴 칸 때문에 수료일이 앞당겨짐)</span>' : ''} · 수업일 <b>${new Set(Object.keys(S.lessons).map(k => k.split('|')[0])).size}일</b> · 편성 <b>${Object.keys(S.lessons).length}시간</b>${(() => { const nl = Object.keys(S.lock || {}).filter(k => S.lock[k] && S.lessons[k] !== undefined).length, nc = (S.ref && S.ref.length) ? Object.keys(S.lessons).filter(k => lessonClash(k).length).length : 0;
-    return (nl ? ` · 고정 <b>${nl}칸</b>` : '') + (S.ref && S.ref.length ? ` · 기준 시간표 ${S.ref.length}개와 겹침 <b class="${nc ? 'bad' : ''}">${nc}칸</b>` : ''); })()}`;
+    return (nl ? ` · 고정 <b>${nl}칸</b>` : '') + (nTray ? ` · <b class="bad">보관함에 ${nTray}시간</b>` : '') + (S.ref && S.ref.length ? ` · 기준 시간표 ${S.ref.length}개와 겹침 <b class="${nc ? 'bad' : ''}">${nc}칸</b>` : ''); })()}`;
   $('#preview').innerHTML = weeks.map((w, wi) => {
     const s0 = parseD(S.settings.start);
     const head = w.map(d => `<th class="${S.holidays[dkey(d)] ? 'hol' : ''}${d < s0 ? ' pre' : ''}">${d.getMonth() + 1}/${d.getDate()}(${WD[d.getDay()]})${S.holidays[dkey(d)] ? '<br><small>' + esc(S.holidays[dkey(d)]) + '</small>' : ''}</th>`).join('');
@@ -458,9 +463,10 @@ function renderPreview() {
         return `<td class="slot${lk ? ' locked' : ''}${cl.length ? ' clash' : ''}${un ? ' unreg' : ''}" data-k="${k}" draggable="${!lk}" style="background:${s.color}" title="${esc(tip)}">${lk ? '<span class="lk">고정</span>' : ''}${sb ? '<span class="sb">대체</span>' : ''}${esc(s.name)}<br><small class="${sp.length > 1 ? 'tm t' + Math.max(0, tj) : ''}">${esc(tShort(t))}</small>${rm}</td>`;
       }).join('')}</tr>`;
     }).join('');
-    return `<table class="week" id="wk${wi}"><caption>${wi + 1}주차</caption><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table>`;
+    const ws = [...new Set(w.map(wOf))], cap = weekendOnly ? `${ws[0] + 1}${ws.length > 1 ? '~' + (ws[ws.length - 1] + 1) : ''}주차 <small>(${w[0].getMonth() + 1}/${w[0].getDate()} ~ ${w[w.length - 1].getMonth() + 1}/${w[w.length - 1].getDate()})</small>` : `${wi + 1}주차`;
+    return `<table class="week${weekendOnly ? ' wkend6' : ''}" id="wk${wi}" data-weeks="${ws.join(' ')}"><caption>${cap}</caption><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table>`;
   }).join('');
-  bindDrag();
+  bindDrag(); if (typeof renderTray === 'function') renderTray();
 }
 let dragK = null;
 function bindDrag() {
@@ -475,7 +481,9 @@ function bindDrag() {
     td.addEventListener('dragleave', () => td.classList.remove('over'));
     td.addEventListener('drop', e => {
       e.preventDefault(); td.classList.remove('over');
-      const k2 = td.dataset.k; if (!dragK || dragK === k2) return;
+      const k2 = td.dataset.k;
+      if (typeof dragTray === 'number' && dragTray >= 0) return dropFromTray(k2);
+      if (!dragK || dragK === k2) return;
       if (isLocked(k2)) { dragK = null; return msg('고정 칸에는 놓을 수 없습니다. [칸 고정하기]로 먼저 풀어 주세요.'); }
       S.lr = S.lr || {}; const ra = S.lr[dragK], rb = S.lr[k2];
       if (rb === undefined) delete S.lr[dragK]; else S.lr[dragK] = rb;
@@ -488,6 +496,8 @@ function bindDrag() {
       ['manT', 'subst'].forEach(n => { const m = S[n] = S[n] || {}, x = m[dragK], y = m[k2]; if (y) m[dragK] = y; else delete m[dragK]; if (x) m[k2] = x; else delete m[k2]; });
       dragK = null; S.edited = true; refreshAll(false);
     });
+    // 오른쪽 클릭: 맨 뒤로 보내기 · 보관함에 넣기 · 보관함에서 꺼내 놓기
+    td.addEventListener('contextmenu', e => { if (typeof cellMenu === 'function') { e.preventDefault(); cellMenu(td, e); } });
     // 두 번 클릭: 이 칸만 교사 바꾸기 (그 과목 담당 교사 → 다른 교사 순)
     td.addEventListener('dblclick', () => {
       const k = td.dataset.k, v = S.lessons[k]; if (v === undefined) return;
@@ -713,12 +723,12 @@ async function dlEval() {
 /* ---------- 저장 / 불러오기 ---------- */
 function saveJson() {
   if (!needResult()) return;
-  const data = { version: 1, plan: S.plan, codes: S.codes, subjects: S.subjects, settings: S.settings, holidays: $('#holidays').value, lessons: S.lessons, lt: S.lt, lr: S.lr || {}, lock: S.lock || {}, order: S.order, orderPm: S.orderPm, trules: S.trules || [], manT: S.manT || {}, subst: S.subst || {}, allowOut: allowOut(), autoSub: $('#autoSub').checked, cmap: S.cmap, fixedRows: S.fixedRows || [], fixedName: S.fixedName || '', rangeEnd: dkey(S.rangeEnd || S.endDate), room: $('#room').value, courseNo: $('#courseNo').value, courseType: $('#courseType').value };
+  const data = { version: 1, plan: S.plan, codes: S.codes, subjects: S.subjects, settings: S.settings, holidays: $('#holidays').value, lessons: S.lessons, lt: S.lt, lr: S.lr || {}, lock: S.lock || {}, order: S.order, orderPm: S.orderPm, trules: S.trules || [], manT: S.manT || {}, subst: S.subst || {}, allowOut: allowOut(), autoSub: $('#autoSub').checked, cmap: S.cmap, tray: S.tray || [], fixedRows: S.fixedRows || [], fixedName: S.fixedName || '', rangeEnd: dkey(S.rangeEnd || S.endDate), room: $('#room').value, courseNo: $('#courseNo').value, courseType: $('#courseType').value };
   saveBlob(new Blob([JSON.stringify(data)], { type: 'application/json' }), `편성저장_${courseTag()}.json`);
 }
 async function loadJson(file) {
   const d = JSON.parse(await file.text());
-  S.fromElec = false;
+  S.fromElec = false; S.tray = [];
   S.plan = d.plan; S.codes = d.codes; S.subjects = d.subjects; S.order = d.order;
   if (d.cmap) ['t', 'r', 's'].forEach(c => S.cmap[c] = { ...S.cmap[c], ...(d.cmap[c] || {}) });
   renderSetup();
@@ -728,7 +738,7 @@ async function loadJson(file) {
   $('#holidays').value = d.holidays; $('#room').value = d.room; $('#courseNo').value = d.courseNo || ''; $('#courseType').value = d.courseType || '일반';
   S.holidays = readHolidays(); S.settings = st; S.lessons = d.lessons; S.lt = d.lt || {}; S.lr = d.lr || {}; S.lock = d.lock || {};
   S.order = d.order; S.orderPm = d.orderPm; ensureOrder();
-  S.trules = d.trules || []; S.manT = d.manT || {}; S.subst = d.subst || {}; $('#allowOut').checked = !!d.allowOut; $('#autoSub').checked = d.autoSub !== false; renderRules(); S.fixedRows = d.fixedRows || []; S.fixedName = d.fixedName || ''; renderFixedInfo();
+  S.tray = d.tray || []; S.trules = d.trules || []; S.manT = d.manT || {}; S.subst = d.subst || {}; $('#allowOut').checked = !!d.allowOut; $('#autoSub').checked = d.autoSub !== false; renderRules(); S.fixedRows = d.fixedRows || []; S.fixedName = d.fixedName || ''; renderFixedInfo();
   S.subjects.forEach(syncTeacher); if (!d.lt) assignTeachers();
   const ks = Object.keys(S.lessons).map(k => k.split('|')[0]).sort(); S.endDate = parseD(ks[ks.length - 1]); S.rangeEnd = d.rangeEnd ? parseD(d.rangeEnd) : S.endDate; $('#extra').checked = st.extra !== false;
   buildDays(); toggleMode(); refreshAll(true); msg('저장한 편성을 불러왔습니다.');

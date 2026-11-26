@@ -232,7 +232,7 @@ function renderRefInfo() {
 
 /* ---------- 편성 (고정일정 → 순서대로, 기준 시간표 피하기) ---------- */
 function generate() {
-  const st = settings(); S.fromElec = false;
+  const st = settings(); S.fromElec = false; S.tray = [];
   if (!S.plan) return msg('운영계획서를 먼저 넣어 주세요.');
   if (!st.start) return msg('개강일을 입력해 주세요.');
   if (!st.periods.length) return msg('수업 교시를 하나 이상 골라 주세요.');
@@ -611,8 +611,94 @@ function renderOverview() {
       const cls = inBar ? `bar${w === a ? ' bs' : ''}${w === z ? ' be' : ''}${n ? '' : ' gap'}` : '';
       return `<td data-w="${w}"${cls ? ` class="${cls}"` : ''}><div class="ovc"${inBar ? ` style="background:${s.color};opacity:${n ? (0.55 + 0.45 * n / maxW).toFixed(2) : '0.3'}"` : ''} title="${esc(s.name)} · ${w + 1}주차(${d.getMonth() + 1}/${d.getDate()}~)${n ? ` · ${n}시간` : inBar ? ' · 이 주는 수업 없음' : ''}"></div>${m}</td>`; }).join('')}</tr>`; }).join('')}
     </tbody></table></div><p class="hint" style="margin:4px 0 0">막대 = 첫 수업일부터 마지막 수업일까지(칸 하나 = 한 주). 색이 진할수록 그 주에 수업이 많고, 흐린 칸은 기간 중 수업이 없는 주입니다. <b>●</b> 본평가 · <b>○</b> 2차·3차. 칸을 누르면 아래 주간 시간표의 그 주로 갑니다.</p>`;
-  $$('#overview td[data-w]').forEach(td => td.onclick = () => { const t = $('#wk' + td.dataset.w); if (t) { $('#preview').scrollTop = t.offsetTop - $('#preview').offsetTop; t.classList.add('flash'); setTimeout(() => t.classList.remove('flash'), 1200); } });
+  $$('#overview td[data-w]').forEach(td => td.onclick = () => goWeek(+td.dataset.w));
 }
+
+/* ---------- 멀리 옮기기: 맨 뒤로 보내기 · 보관함 ---------- */
+// 그 주가 들어 있는 표로 화면 이동
+function goWeek(w) {
+  const t = $(`#preview table[data-weeks~="${w}"]`) || $('#wk' + w); if (!t) return;
+  t.scrollIntoView({ behavior: 'smooth', block: 'start' }); t.classList.add('flash'); setTimeout(() => t.classList.remove('flash'), 1200);
+}
+const takeCell = k => {   // 칸 하나를 꺼냄(교사·강의실·직접 바꾼 표시 함께)
+  const v = S.lessons[k]; if (v === undefined) return null;
+  const it = { i: v, t: lessonT(k), r: lessonR(k), m: !!(S.manT || {})[k], from: k };
+  delete S.lessons[k]; delete S.lt[k]; if (S.lr) delete S.lr[k]; if (S.manT) delete S.manT[k]; if (S.subst) delete S.subst[k]; if (S.lock) delete S.lock[k];
+  return it;
+};
+const putCell = (k, it) => {
+  const s = S.subjects[it.i]; S.lessons[k] = it.i;
+  if (it.t) S.lt[k] = it.t; else delete S.lt[k];
+  S.lr = S.lr || {}; if (it.r && it.r !== subjRoom(s)) S.lr[k] = it.r; else delete S.lr[k];
+  if (it.m) (S.manT = S.manT || {})[k] = 1;
+};
+// 마지막 수업 바로 다음 빈칸(같은 날 남은 교시 → 다음 수업일들). 필요하면 수료일이 늘어남
+function slotAfterLast() {
+  const st = S.settings, keys = lessonKeysSorted(); if (!keys.length) return null;
+  const [ld, lp] = keys[keys.length - 1].split('|'), ps = [...st.periods].sort((a, b) => a - b);
+  for (let i = 0, d = parseD(ld); i < 400; i++, d = addD(d, 1)) {
+    const dk = dkey(d);
+    if (!st.weekdays.includes(d.getDay()) || S.holidays[dk]) continue;
+    for (const p of ps) { if (dk === ld && p <= +lp) continue; if (S.lessons[dk + '|' + p] === undefined) return dk + '|' + p; }
+  }
+  return null;
+}
+function sendToEnd(k) {
+  if (isLocked(k)) return msg('고정 칸은 옮길 수 없습니다. [칸 고정하기]로 먼저 풀어 주세요.');
+  const it = takeCell(k); if (!it) return;
+  const k2 = slotAfterLast(); if (!k2) { putCell(k, it); return msg('뒤쪽에 넣을 빈칸을 찾지 못했습니다.'); }
+  putCell(k2, it); afterFarMove();
+  msg(`${S.subjects[it.i].name} 1시간: ${fmtK(k.split('|')[0])} ${k.split('|')[1]}교시 → <b>${fmtK(k2.split('|')[0])} ${k2.split('|')[1]}교시</b>(맨 뒤)로 보냈습니다. 원래 칸은 비어 있습니다.`);
+  setTimeout(() => { const td = $(`#preview td[data-k="${k2}"]`); if (td) { td.scrollIntoView({ behavior: 'smooth', block: 'center' }); td.classList.add('flashcell'); setTimeout(() => td.classList.remove('flashcell'), 1600); } }, 50);
+}
+function afterFarMove() {
+  recalcEnd(); if (!S.rangeEnd || S.endDate > S.rangeEnd) S.rangeEnd = S.endDate;
+  S.edited = true; buildDays(); refreshAll(false);
+}
+let dragTray = -1;
+function toTray(k) {
+  if (isLocked(k)) return msg('고정 칸은 보관함에 넣을 수 없습니다.');
+  const it = takeCell(k); if (!it) return; (S.tray = S.tray || []).push(it); afterFarMove();
+  msg(`${S.subjects[it.i].name} 1시간을 보관함에 넣었습니다. 옮길 주로 가서(전체 보기에서 주를 누르면 이동) 보관함 칸을 끌어다 놓으세요.`);
+}
+function dropFromTray(k2, j) {
+  j = j === undefined ? dragTray : j; dragTray = -1;
+  const it = (S.tray || [])[j]; if (!it) return;
+  if (isLocked(k2)) return msg('고정 칸에는 놓을 수 없습니다.');
+  S.tray.splice(j, 1);
+  const old = takeCell(k2); if (old) S.tray.push(old);   // 수업이 있던 칸이면 그 수업은 보관함으로(서로 바꾸기)
+  putCell(k2, it); afterFarMove();
+  msg(`${S.subjects[it.i].name} 1시간을 ${fmtK(k2.split('|')[0])} ${k2.split('|')[1]}교시에 놓았습니다.${old ? ` 원래 있던 ${S.subjects[old.i].name}은 보관함으로 갔습니다.` : ''}`);
+}
+function renderTray() {
+  const el = $('#tray'); if (!el) return;
+  const T = S.tray || [];
+  el.innerHTML = `<b>보관함</b> <small>멀리 옮길 칸을 여기 끌어다 넣고, 옮길 주로 가서 다시 끌어다 놓으세요 · 칸에서 오른쪽 클릭 → [맨 뒤로 보내기]</small>
+    <div class="trayItems">${T.length ? T.map((it, j) => { const s = S.subjects[it.i]; return `<span class="chip" draggable="true" data-j="${j}" style="background:${s.color}" title="${esc(s.name)} / ${esc(it.t)} / 원래 ${fmtK(it.from.split('|')[0])} ${it.from.split('|')[1]}교시">${esc(s.name)} <small>${esc(tShort(it.t))} · ${fmtK(it.from.split('|')[0])}</small></span>`; }).join('') : '<span class="trayEmpty">비어 있음 — 여기로 끌어다 놓기</span>'}</div>`;
+  el.classList.toggle('has', T.length > 0);
+  el.ondragover = e => { e.preventDefault(); el.classList.add('over'); };
+  el.ondragleave = () => el.classList.remove('over');
+  el.ondrop = e => { e.preventDefault(); el.classList.remove('over'); if (dragK) { const k = dragK; dragK = null; toTray(k); } };
+  $$('#tray .chip').forEach(c => { c.ondragstart = e => { dragTray = +c.dataset.j; dragK = null; e.dataTransfer.effectAllowed = 'move'; }; c.ondragend = () => setTimeout(() => { dragTray = -1; }, 0); });
+}
+// 칸 오른쪽 클릭 메뉴
+function cellMenu(td, e) {
+  closeMenu();
+  const k = td.dataset.k, has = S.lessons[k] !== undefined, T = S.tray || [];
+  const items = [];
+  if (has) { items.push(['end', '맨 뒤로 보내기 (마지막 수업 다음 빈칸)']); items.push(['tray', '보관함에 넣기']); items.push(['teacher', '이 칸 교사 바꾸기']); }
+  T.forEach((it, j) => items.push(['put' + j, `보관함에서 놓기: ${S.subjects[it.i].name} (${tShort(it.t)})`]));
+  if (!items.length) return;
+  const m = document.createElement('div'); m.id = 'cellMenu';
+  m.innerHTML = items.map(([a, t]) => `<button type="button" data-a="${a}">${esc(t)}</button>`).join('');
+  m.style.left = e.clientX + 'px'; m.style.top = e.clientY + 'px'; document.body.appendChild(m);
+  m.onclick = ev => { const a = ev.target.closest('button')?.dataset.a; closeMenu(); if (!a) return;
+    if (a === 'end') sendToEnd(k); else if (a === 'tray') toTray(k);
+    else if (a === 'teacher') td.dispatchEvent(new MouseEvent('dblclick'));
+    else if (a.startsWith('put')) dropFromTray(k, +a.slice(3)); };
+  setTimeout(() => document.addEventListener('click', closeMenu, { once: true }), 0);
+}
+const closeMenu = () => { const m = $('#cellMenu'); if (m) m.remove(); };
 
 /* ---------- 미리보기: 칸 고정 모드 ---------- */
 S.lockMode = false;
@@ -634,6 +720,12 @@ function bindExtra() {
   $('#fRef').addEventListener('change', e => { onRefFiles([...e.target.files]); e.target.value = ''; });
   $('#fRefDir').addEventListener('change', e => { onRefFiles([...e.target.files].filter(f => /\.(json|xlsx)$/i.test(f.name) && !/^~\$/.test(f.name))); e.target.value = ''; });
   $('#btnLockMode').onclick = toggleLockMode;
+  // 보관함에 수업이 남아 있으면 내려받기 전에 확인
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('#btnElec, #btnPrint, #btnEval'); const n = (S.tray || []).length;
+    if (b && n && !window.confirm(`보관함에 ${n}시간이 남아 있어, 그 시간이 빠진 채로 내려받습니다. 계속할까요?`)) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
   $('#btnRules').onclick = () => { const el = $('#rulePanel'); el.hidden = !el.hidden; $('#btnRules').classList.toggle('on', !el.hidden); renderRules(); };
   $('#ruleAdd').onclick = addRule;
   $('#ruleApply').onclick = reapplyRules;
