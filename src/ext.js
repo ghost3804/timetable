@@ -431,7 +431,8 @@ async function onElecImport(file) {
       if (ts.length > MAX_T) sp[MAX_T - 1].h += ts.slice(MAX_T).reduce((a, x) => a + x[1], 0);
       s.tsplit = sp; s.teacher = sp[0].t; if (!s.teachers || !s.teachers.length) s.teachers = sp.map(x => x.t);
     }
-    const r1 = (most(mine.map(c => c.r))[0] || [''])[0]; s.room = r1 && r1 !== room0 ? r1 : '';
+    // 전자시간표에 적힌 강의실을 과목마다 그대로 적어 둠(과정 기본 강의실과 같아도 비워 두지 않음)
+    const r1 = (most(mine.map(c => c.r))[0] || [''])[0]; if (r1) s.room = r1;
   });
   if (!fromPlan) S.plan.totalHours = S.subjects.reduce((a, s) => a + s.hours, 0);
   if (!fromPlan) S.subjects.forEach((s, j) => s.half = j < Math.ceil(S.subjects.length / 2) ? 'am' : 'pm');   // 운영계획서와 같은 기본값: 앞쪽 절반 오전, 나머지 오후
@@ -445,7 +446,9 @@ async function onElecImport(file) {
   $('#start').value = days[0]; $('#lunch').value = String(la); $('#mode').value = 'seq';
   $$('.pchk').forEach(e => e.checked = (periods.length ? periods : Object.keys(pc).map(Number)).includes(+e.value));
   $$('.wchk').forEach(e => e.checked = wds.has(+e.value));
-  S.sel = new Set(); renderSetup(); $('#room').value = room0; toggleMode();
+  S.sel = new Set(); renderSetup();
+  if (room0 && ![...$('#room').options].some(o => o.value === room0)) $('#room').insertAdjacentHTML('afterbegin', `<option>${esc(room0)}</option>`);
+  $('#room').value = room0; toggleMode();
   S.holidays = readHolidays(); S.settings = settings();
   // 편성 칸 채우기
   const L = {}, Tt = {}, R = {};
@@ -461,7 +464,7 @@ async function onElecImport(file) {
   if (hol.length) warn.push(`공휴일 목록에 있는 날 수업 ${hol.length}일 (${hol.slice(0, 2).join(', ')})`);
   if (other.vac) warn.push(`방학/원격 'N'이 아닌 행 ${other.vac}개 — 다시 내려받으면 'N'으로 나감`);
   S.importWarn = warn;
-  msg(`전자시간표를 불러왔습니다: ${days.length}일 · ${cells.length}시간 · 교과목 ${order.length}개 · 점심 ${la}교시 뒤${warn.length ? ' · ⚠ ' + warn.join(' / ') : ''}`);
+  msg(`전자시간표를 불러왔습니다: ${days.length}일 · ${cells.length}시간 · 교과목 ${order.length}개 · 강의실 ${rAll.length}곳 · 점심 ${la}교시 뒤${warn.length ? ' · ⚠ ' + warn.join(' / ') : ''}`);
   if (warn.length) setTimeout(() => msg('⚠ ' + warn.join(' / ')), 4600);
 }
 
