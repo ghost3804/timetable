@@ -345,6 +345,9 @@ function parsePlan(rows) {
     const teachers = tRaw.split(/\n/).map(x => x.replace(/\[.*?\]/g, '').trim()).filter(Boolean);
     let kind = sec;
     if (sec === '비NCS') kind = (parseFloat(get(r, ph)) || 0) > 0 ? '비NCS 실기' : '비NCS 이론';
+    // 교사가 여럿인 능력단위는 운영계획서에 교사마다 한 줄씩 나옴 — 둘째 줄부터는 시간·능력단위가 비어 있으므로 앞 과목에 교사로 합침
+    const same = !hours && plan.subjects.slice().reverse().find(x => x.kind === kind && norm(x.name) === norm(first));
+    if (same) { teachers.forEach(t => { if (!same.teachers.includes(t)) same.teachers.push(t); (same.coT = same.coT || []).includes(t) || same.coT.push(t); }); continue; }
     const s = { kind, name: first, hours, teachers, ncs: '', unit: first, level: '' };
     if (sec === '전공') {
       const u = get(r, col('NCS능력단위'));
@@ -416,7 +419,7 @@ function buildSubjects() {
   S.subjects = p.subjects.map((s, i) => ({
     ...s, idx: i,
     teacher: s.teachers[0] || p.teachers[0] || '',
-    tsplit: [{ t: s.teachers[0] || p.teachers[0] || '', h: s.hours }],
+    tsplit: [{ t: s.teachers[0] || p.teachers[0] || '', h: s.hours }, ...(s.coT || []).filter(t => t !== s.teachers[0]).slice(0, MAX_T - 1).map(t => ({ t, h: 0 }))],
     code: '',
     method: (k => k === undefined ? '평가자 체크리스트' : p.methods[k])([norm(s.unit), norm(s.name)].find(k => k in p.methods)),
     half: i < Math.ceil(p.subjects.length / 2) ? 'am' : 'pm', color: COLORS[i % COLORS.length]
@@ -494,6 +497,7 @@ const subjRoom = s => (s && s.room) || $('#room').value;   // 과목에 강의�
 // 출력용시간표 등에 쓰는 짧은 강의실 이름: 앞의 (23) 번호, 뒤의 _코드, 괄호 설명을 뺌 (다 빠지면 원래 이름)
 const roomShort = name => { const o = String(name || '').trim(), v = o.replace(/^\(\d+\)\s*/, '').replace(/_.*$/, '').replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s+/g, ' ').trim(); return v || o; };
 const teacherCode = n => { const f = findCode('t', n); return f ? f.e.code : ''; };
+const tShort = n => { const o = String(n || '').trim(), v = o.replace(/_.*$/, '').trim(); return v || o; };   // 출력용: '구제국_1664200' → '구제국'
 /* ---------- 한 과목을 여러 교사(최대 3명)가 나눠 맡기 ---------- */
 const MAX_T = 3;
 const splitOf = s => (s.tsplit && s.tsplit.length ? s.tsplit : [{ t: s.teacher, h: s.hours }]);
@@ -667,7 +671,7 @@ function renderPreview() {
         const t = lessonT(k), sp = splitOf(s), tj = sp.findIndex(x => x.t === t), R = lessonR(k), rm = R !== $('#room').value ? `<br><small class="rm">${esc(roomShort(R))}</small>` : '';
         const lk = isLocked(k), cl = lessonClash(k), un = isUnreg(s, t), sb = !!(S.subst && S.subst[k]);
         const tip = `${s.name} / ${t} / ${R}${lk ? '\n[고정 칸] 드래그로 움직이지 않습니다' : ''}${un ? '\n[등록 외 교사] 운영계획서에 이 과목 교사로 등록되지 않음' : ''}${sb ? '\n[대체] 기준 시간표와 겹쳐 다른 교사로 자동 대체됨' : ''}${cl.length ? '\n⚠ 겹침: ' + cl.map(c => c.kind + ' — ' + c.label).join('\n   ') : ''}\n(두 번 클릭하면 이 칸 교사 바꾸기)`;
-        return `<td class="slot${lk ? ' locked' : ''}${cl.length ? ' clash' : ''}${un ? ' unreg' : ''}" data-k="${k}" draggable="${!lk}" style="background:${s.color}" title="${esc(tip)}">${lk ? '<span class="lk">고정</span>' : ''}${sb ? '<span class="sb">대체</span>' : ''}${esc(s.name)}<br><small class="${sp.length > 1 ? 'tm t' + Math.max(0, tj) : ''}">${esc(t)}</small>${rm}</td>`;
+        return `<td class="slot${lk ? ' locked' : ''}${cl.length ? ' clash' : ''}${un ? ' unreg' : ''}" data-k="${k}" draggable="${!lk}" style="background:${s.color}" title="${esc(tip)}">${lk ? '<span class="lk">고정</span>' : ''}${sb ? '<span class="sb">대체</span>' : ''}${esc(s.name)}<br><small class="${sp.length > 1 ? 'tm t' + Math.max(0, tj) : ''}">${esc(tShort(t))}</small>${rm}</td>`;
       }).join('')}</tr>`;
     }).join('');
     return `<table class="week" id="wk${wi}"><caption>${wi + 1}주차</caption><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table>`;
@@ -828,7 +832,7 @@ async function dlPrint() {
   let top = [1, 2, 3, 4, 5].map(rowXml).join('');
   top = top.replace(/(<c r="A1"[^>]*><is><t>)[\s\S]*?(<\/t>)/, `$1${esc(S.plan.name)} 연간훈련 세부계획표$2`)
     .replace(/(<c r="B2"[^>]*><is><t>)[\s\S]*?(<\/t>)/, `$1훈련기간 : ${dkey(S.days[0]).replace(/-/g, '.')} ~ ${dkey(S.endDate).replace(/-/g, '.')}$2`)
-    .replace(/<c r="H2"( s="\d+")?[^>]*?(?:\/>|>[\s\S]*?<\/c>)/, m => cStr('H2', (m.match(/ s="(\d+)"/) || [])[1], `담당교사 : ${teacherNames().join(', ')}`));
+    .replace(/<c r="H2"( s="\d+")?[^>]*?(?:\/>|>[\s\S]*?<\/c>)/, m => cStr('H2', (m.match(/ s="(\d+)"/) || [])[1], `담당교사 : ${[...new Set(teacherNames().map(tShort))].join(', ')}`));
   const tplRow = i => { const x = rowXml(6 + i); const st = {}; [...x.matchAll(/<c r="([A-Z]+)\d+" s="(\d+)"/g)].forEach(m => st[m[1]] = m[2]); return { ht: (x.match(/ht="([\d.]+)"/) || [])[1] || '27.95', st }; };
   const tpl = [...Array(9)].map((_, i) => tplRow(i));         // 틀은 4교시 뒤 점심형: 4번째(0부터)가 점심
   const styleFor = (pos, isLunch) => isLunch ? tpl[4] : (pos === 4 && S.settings.lunchAfter === 3 ? tpl[2] : tpl[pos]);
@@ -870,7 +874,7 @@ async function dlPrint() {
       c += cStr('H' + rr, sty.H, s ? (s.ncs ? s.unit : s.name) : '');
       c += cStr('I' + rr, sty.I, s ? (s.ncs ? s.unit : (s.unitDetail || s.name)) : '');
       c += cStr('J' + rr, sty.J, s ? roomShort(lessonR(k + '|' + pr.p)) : '');
-      c += cStr('K' + rr, sty.K, s ? lessonT(k + '|' + pr.p) : '');
+      c += cStr('K' + rr, sty.K, s ? tShort(lessonT(k + '|' + pr.p)) : '');
       c += pos === 0 ? cNum('L' + rr, sty.L, dayTot || '') : cNum('L' + rr, sty.L, '');
       c += pos === 0 ? cNum('M' + rr, sty.M, dayTot ? cum : '') : cNum('M' + rr, sty.M, '');
       out += `<row r="${rr}" ht="${styleFor(pos, isL).ht}" customHeight="1">${c}</row>`;
@@ -905,14 +909,14 @@ async function dlEval() {
   const st3 = (rowXml(3).match(/s="(\d+)"/) || [])[1];
   const y = S.days[0].getFullYear(), teachers = teacherNames();
   let r2 = rowXml(2).replace(/(<t>)[\s\S]*?(<\/t>)/, `$1${y}년   훈 련 실 시 계 획 서$2`);
-  const r3 = `<row r="3">${cStr('B3', st3, '과정번호')}${cStr('D3', st3, $('#courseNo').value)}${cStr('E3', st3, $('#courseType').value)}${cStr('F3', st3, S.plan.name)}${cStr('J3', st3, `훈련기간 : ${dkey(S.days[0]).replace(/-/g, '.')} ~ ${dkey(S.endDate).replace(/-/g, '.')} `)}${cStr('O3', st3, teachers[0] || '')}${cStr('R3', st3, teachers[1] || '')}</row>`;
+  const r3 = `<row r="3">${cStr('B3', st3, '과정번호')}${cStr('D3', st3, $('#courseNo').value)}${cStr('E3', st3, $('#courseType').value)}${cStr('F3', st3, S.plan.name)}${cStr('J3', st3, `훈련기간 : ${dkey(S.days[0]).replace(/-/g, '.')} ~ ${dkey(S.endDate).replace(/-/g, '.')} `)}${cStr('O3', st3, tShort(teachers[0] || ''))}${cStr('R3', st3, tShort(teachers[1] || ''))}</row>`;
   const body = evalPlan().map((e, i) => {
     const s = e.s, r = 5 + i, ncs = !!s.ncs;
     const vals = [
       ['B', 'n', i + 1], ['C', 'n', s.idx + 1], ['D', 's', s.code], ['E', 's', s.kind], ['F', 's', s.name],
       ['G', 's', norm(ncs ? s.unit : s.name)], ['H', 's', ncs ? `[${s.ncs}]` : `[${s.kind}]`], ['I', 's', ncs ? s.unit : s.name],
       ['J', 's', ncs && s.level ? `${s.level}수준` : '1수준'], ['K', 's', s.method], ['L', 's', ''], ['M', 'n', 0], ['N', 's', ''], ['O', 'n', 0],
-      ['P', 'n', parseD(e.main).getMonth() + 1], ['Q', 'n', e.hours], ['R', 's', roomShort(subjRoom(s))], ['S', 's', e.teacher],
+      ['P', 'n', parseD(e.main).getMonth() + 1], ['Q', 'n', e.hours], ['R', 's', roomShort(subjRoom(s))], ['S', 's', tShort(e.teacher)],
       ['T', 'n', serial(parseD(e.first))], ['U', 'n', serial(parseD(e.main))], ['V', 'n', serial(parseD(e.e2))], ['W', 'n', serial(parseD(e.e3))]];
     return `<row r="${r}">` + vals.map(([c, t, v]) => t === 'n' ? cNum(c + r, st5[c], v) : cStr(c + r, st5[c], v)).join('') + '</row>';
   }).join('');
