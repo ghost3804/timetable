@@ -139,7 +139,11 @@ td.slot.extra{background:repeating-linear-gradient(135deg,#fff,#fff 6px,#f0f0f0 
 /* 미리보기 */
 table.week caption{color:#000;font-weight:700}td.pc{background:#f7f7f7}
 td.pc em{color:var(--acc-t);border-color:var(--acc-t);border-radius:2px}
-td.slot.over,td.slot.sel{outline:3px solid var(--acc);outline-offset:-3px}td.slot.sel{filter:brightness(.93)}
+td.slot.over{outline:3px solid var(--acc);outline-offset:-3px}
+td.slot{position:relative}td.slot.sel{outline:3px solid #000;outline-offset:-3px;filter:saturate(1.6) brightness(.85);font-weight:700}
+td.slot.sel::before{content:"✓";position:absolute;top:2px;left:3px;background:#000;color:var(--acc);font-size:11px;line-height:1;padding:2px 4px;border-radius:2px}
+body.selmode td.slot:not(.empty):not(.locked){cursor:cell}body.selmode #preview{outline:2px dashed #000;outline-offset:4px;user-select:none}body.selmode table.week th[data-d]{cursor:pointer}body.selmode table.week th[data-d]:hover{background:#f4fae8}
+.selwhere{color:#3f3f3f}.trayItems .chip.all{background:#000;color:#fff;border-color:#000;font-weight:700}
 .selbar{background:#f4fae8;border:1px solid var(--acc);border-radius:2px}
 #tray{background:#fff;border:1px dashed #a7a7a7;border-radius:2px}#tray.has{border:1px solid var(--warn);background:#fff6f6}#tray.over{outline:3px solid var(--acc)}
 .trayItems .chip{border-radius:2px;border-color:#5e5e5e}
@@ -259,7 +263,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   <h2><span class="step">3</span>미리보기 · 수정 · 내려받기</h2>
   <div id="summary"></div>
   <div class="layout">
-    <div><div class="ptools"><button type="button" class="bbtn" id="btnLockMode">칸 고정하기</button> <button type="button" class="bbtn" id="btnFixExport">고정 칸을 양식으로 내보내기</button> <button type="button" class="bbtn" id="btnOverview" title="10개월 과정도 한눈에: 과목별 기간 막대와 평가일">전체 보기 ▾</button> <span class="dropmode">끌어 놓기: <label><input type="radio" name="dropmode" value="swap" checked> 바꾸기</label> <label><input type="radio" name="dropmode" id="dropInsert" value="insert"> 끼워 넣기·당기기</label></span> <span class="lg"><span class="lk">고정</span> 고정 칸 · <span class="sb">대체</span> 자동 대체 · <span class="clashlg">빨간 테두리</span> 기준 시간표와 겹침 · <span class="unreglg">주황 테두리</span> 등록 외 교사</span></div><div id="overview" hidden></div><p class="hint" style="margin:0 0 8px">칸을 끌어서 다른 칸에 놓으면 두 칸이 서로 바뀝니다(빈 칸으로도 옮길 수 있어요). <b>끼워 넣기·당기기</b>를 고르거나 <b>여러 칸</b>(Ctrl+클릭·Shift+클릭)을 끌면, 놓은 자리 앞에 끼워 넣고 뒤 수업은 밀고 빈 자리는 당겨 채웁니다(고정 칸은 그대로). 과목별 총시간은 그대로 유지됩니다. 칸을 <b>두 번 클릭</b>하면 그 칸의 교사만 바꿀 수 있어요. 멀리 옮길 때는 칸에서 <b>오른쪽 클릭</b> → [맨 뒤로 보내기] 또는 [보관함에 넣기]를 쓰세요.</p><div id="tray"></div>
+    <div><div class="ptools"><button type="button" class="bbtn" id="btnSelMode" title="누르거나 마우스로 훑어서 여러 칸 고르기, 날짜 머리를 누르면 그날 전체">여러 칸 고르기</button> <button type="button" class="bbtn" id="btnLockMode">칸 고정하기</button> <button type="button" class="bbtn" id="btnFixExport">고정 칸을 양식으로 내보내기</button> <button type="button" class="bbtn" id="btnOverview" title="10개월 과정도 한눈에: 과목별 기간 막대와 평가일">전체 보기 ▾</button> <span class="dropmode">끌어 놓기: <label><input type="radio" name="dropmode" value="swap" checked> 바꾸기</label> <label><input type="radio" name="dropmode" id="dropInsert" value="insert"> 끼워 넣기·당기기</label></span> <span class="lg"><span class="lk">고정</span> 고정 칸 · <span class="sb">대체</span> 자동 대체 · <span class="clashlg">빨간 테두리</span> 기준 시간표와 겹침 · <span class="unreglg">주황 테두리</span> 등록 외 교사</span></div><div id="overview" hidden></div><p class="hint" style="margin:0 0 8px">칸을 끌어서 다른 칸에 놓으면 두 칸이 서로 바뀝니다(빈 칸으로도 옮길 수 있어요). <b>끼워 넣기·당기기</b>를 고르거나 <b>여러 칸</b>(Ctrl+클릭·Shift+클릭)을 끌면, 놓은 자리 앞에 끼워 넣고 뒤 수업은 밀고 빈 자리는 당겨 채웁니다(고정 칸은 그대로). 과목별 총시간은 그대로 유지됩니다. 칸을 <b>두 번 클릭</b>하면 그 칸의 교사만 바꿀 수 있어요. 멀리 옮길 때는 칸에서 <b>오른쪽 클릭</b> → [맨 뒤로 보내기] 또는 [보관함에 넣기]를 쓰세요.</p><div id="tray"></div>
   <div id="preview"></div></div>
     <div class="side">
       <section><h2>과목별 시간</h2><table id="totals"></table></section>
@@ -727,7 +731,7 @@ function renderPreview() {
     return (nl ? ` · 고정 <b>${nl}칸</b>` : '') + (nTray ? ` · <b class="bad">보관함에 ${nTray}시간</b>` : '') + (S.ref && S.ref.length ? ` · 기준 시간표 ${S.ref.length}개와 겹침 <b class="${nc ? 'bad' : ''}">${nc}칸</b>` : ''); })()}`;
   $('#preview').innerHTML = weeks.map((w, wi) => {
     const s0 = parseD(S.settings.start);
-    const head = w.map(d => `<th class="${S.holidays[dkey(d)] ? 'hol' : ''}${d < s0 ? ' pre' : ''}">${d.getMonth() + 1}/${d.getDate()}(${WD[d.getDay()]})${S.holidays[dkey(d)] ? '<br><small>' + esc(S.holidays[dkey(d)]) + '</small>' : ''}</th>`).join('');
+    const head = w.map(d => `<th data-d="${dkey(d)}" class="${S.holidays[dkey(d)] ? 'hol' : ''}${d < s0 ? ' pre' : ''}">${d.getMonth() + 1}/${d.getDate()}(${WD[d.getDay()]})${S.holidays[dkey(d)] ? '<br><small>' + esc(S.holidays[dkey(d)]) + '</small>' : ''}</th>`).join('');
     const ps = [...new Set([...usedPeriods(), ...extraPeriods()])].sort((a, b) => a - b), showLunch = ps[0] <= T.lunchAfter && ps[ps.length - 1] > T.lunchAfter;
     const ex = extraPeriods();
     const body = T.rows.filter(r => r.p === '점심' ? showLunch : ps.includes(r.p)).map(r => {
@@ -740,7 +744,7 @@ function renderPreview() {
         const t = lessonT(k), sp = splitOf(s), tj = sp.findIndex(x => x.t === t), R = lessonR(k), rm = R !== $('#room').value ? `<br><small class="rm">${esc(roomShort(R))}</small>` : '';
         const lk = isLocked(k), cl = lessonClash(k), un = isUnreg(s, t), sb = !!(S.subst && S.subst[k]);
         const tip = `${s.name} / ${t} / ${R}${lk ? '\n[고정 칸] 드래그로 움직이지 않습니다' : ''}${un ? '\n[등록 외 교사] 운영계획서에 이 과목 교사로 등록되지 않음' : ''}${sb ? '\n[대체] 기준 시간표와 겹쳐 다른 교사로 자동 대체됨' : ''}${cl.length ? '\n⚠ 겹침: ' + cl.map(c => c.kind + ' — ' + c.label).join('\n   ') : ''}\n(두 번 클릭하면 이 칸 교사 바꾸기)`;
-        return `<td class="slot${lk ? ' locked' : ''}${cl.length ? ' clash' : ''}${un ? ' unreg' : ''}${S.selK && S.selK.has(k) ? ' sel' : ''}" data-k="${k}" draggable="${!lk}" style="background:${s.color}" title="${esc(tip)}">${lk ? '<span class="lk">고정</span>' : ''}${sb ? '<span class="sb">대체</span>' : ''}${esc(s.name)}<br><small class="${sp.length > 1 ? 'tm t' + Math.max(0, tj) : ''}">${esc(tShort(t))}</small>${rm}</td>`;
+        return `<td class="slot${lk ? ' locked' : ''}${cl.length ? ' clash' : ''}${un ? ' unreg' : ''}${S.selK && S.selK.has(k) ? ' sel' : ''}" data-k="${k}" draggable="${!lk && !S.selMode}" style="background:${s.color}" title="${esc(tip)}">${lk ? '<span class="lk">고정</span>' : ''}${sb ? '<span class="sb">대체</span>' : ''}${esc(s.name)}<br><small class="${sp.length > 1 ? 'tm t' + Math.max(0, tj) : ''}">${esc(tShort(t))}</small>${rm}</td>`;
       }).join('')}</tr>`;
     }).join('');
     const ws = [...new Set(w.map(wOf))], cap = weekendOnly ? `${ws[0] + 1}${ws.length > 1 ? '~' + (ws[ws.length - 1] + 1) : ''}주차 <small>(${w[0].getMonth() + 1}/${w[0].getDate()} ~ ${w[w.length - 1].getMonth() + 1}/${w[w.length - 1].getDate()})</small>` : `${wi + 1}주차`;
@@ -783,6 +787,7 @@ function bindDrag() {
     td.addEventListener('contextmenu', e => { if (typeof cellMenu === 'function') { e.preventDefault(); cellMenu(td, e); } });
     // 두 번 클릭: 이 칸만 교사 바꾸기 (그 과목 담당 교사 → 다른 교사 순)
     td.addEventListener('dblclick', () => {
+      if (S.selMode) return;
       const k = td.dataset.k, v = S.lessons[k]; if (v === undefined) return;
       const s = S.subjects[v], cur = lessonT(k);
       const all = [...new Set([cur, ...regT(s), ...splitOf(s).map(x => x.t), ...(allowOut() ? allTeachers() : [])])].filter(Boolean);
@@ -1780,9 +1785,50 @@ function selectClick(k, e) {
     lessonKeysSorted().filter(x => keyCmp(x, a) >= 0 && keyCmp(x, b) <= 0 && !isLocked(x)).forEach(x => S.selK.add(x));
   } else { if (S.selK.has(k)) S.selK.delete(k); else S.selK.add(k); selAnchor = k; }
   window.getSelection && window.getSelection().removeAllRanges();
-  $$('#preview td.slot').forEach(td => td.classList.toggle('sel', S.selK.has(td.dataset.k)));
+  paintSel();
+}
+function paintSel() {
+  $$('#preview td.slot').forEach(td => td.classList.toggle('sel', !!(S.selK && S.selK.has(td.dataset.k))));
   renderTray();
 }
+const selSummary = () => {
+  const ks = [...(S.selK || [])].sort(keyCmp); if (!ks.length) return '';
+  const a = ks[0].split('|'), z = ks[ks.length - 1].split('|'), by = {};
+  ks.forEach(k => { const n = S.subjects[S.lessons[k]].name; by[n] = (by[n] || 0) + 1; });
+  return `${fmtK(a[0])} ${a[1]}교시 ~ ${fmtK(z[0])} ${z[1]}교시 · ${Object.entries(by).map(([n, c]) => `${esc(n)} ${c}`).join(', ')}`;
+};
+// [여러 칸 고르기] 모드: 칸을 누르거나 마우스로 훑어서 고르기, 날짜 머리를 누르면 그날 전체
+function toggleSelMode() {
+  S.selMode = !S.selMode; document.body.classList.toggle('selmode', S.selMode); $('#btnSelMode').classList.toggle('on', S.selMode);
+  if (S.selMode && S.lockMode) toggleLockMode();
+  refreshAll(false);
+  msg(S.selMode ? '여러 칸 고르기: 칸을 누르거나 마우스를 누른 채 훑으면 골라집니다. 날짜 머리를 누르면 그날 수업 전체. 다 골랐으면 옮길 칸에서 오른쪽 클릭하세요.' : '여러 칸 고르기를 껐습니다(고른 칸은 그대로).');
+}
+let paintOn = null;
+function bindSelPaint() {
+  const pv = $('#preview'); if (!pv || pv.dataset.selBound) return; pv.dataset.selBound = '1';
+  pv.addEventListener('mousedown', e => {
+    if (!S.selMode || e.button !== 0) return;
+    const th = e.target.closest('th[data-d]');
+    if (th) { const d = th.dataset.d, ks = lessonKeysSorted().filter(k => k.startsWith(d + '|') && !isLocked(k)); S.selK = S.selK || new Set();
+      const all = ks.length && ks.every(k => S.selK.has(k)); ks.forEach(k => all ? S.selK.delete(k) : S.selK.add(k)); e.preventDefault(); return paintSel(); }
+    const td = e.target.closest('td.slot'); if (!td || S.lessons[td.dataset.k] === undefined || isLocked(td.dataset.k)) return;
+    e.preventDefault(); S.selK = S.selK || new Set();
+    if (e.shiftKey) return selectClick(td.dataset.k, e);
+    paintOn = !S.selK.has(td.dataset.k); selAnchor = td.dataset.k;
+    paintOn ? S.selK.add(td.dataset.k) : S.selK.delete(td.dataset.k); td.classList.toggle('sel', paintOn);
+  });
+  pv.addEventListener('mouseover', e => {
+    if (paintOn === null) return; const td = e.target.closest('td.slot'); if (!td || S.lessons[td.dataset.k] === undefined || isLocked(td.dataset.k)) return;
+    paintOn ? S.selK.add(td.dataset.k) : S.selK.delete(td.dataset.k); td.classList.toggle('sel', paintOn);
+  });
+  document.addEventListener('mouseup', () => { if (paintOn !== null) { paintOn = null; renderTray(); } });
+}
+function goFirstSel() {
+  const k = [...(S.selK || [])].sort(keyCmp)[0]; if (!k) return;
+  const td = $(`#preview td[data-k="${k}"]`); if (td) { td.scrollIntoView({ behavior: 'smooth', block: 'center' }); td.classList.add('flashcell'); setTimeout(() => td.classList.remove('flashcell'), 1400); }
+}
+const selToTray = () => { const n = S.selK.size; [...S.selK].sort(keyCmp).forEach(k => { const it = takeCell(k); if (it) (S.tray = S.tray || []).push(it); }); S.selK = new Set(); afterFarMove(); msg(`고른 ${n}칸을 보관함에 넣었습니다. 옮길 자리에서 오른쪽 클릭 → [보관함 모두 여기 앞에 끼워 넣기]`); };
 function afterFarMove() {
   recalcEnd(); if (!S.rangeEnd || S.endDate > S.rangeEnd) S.rangeEnd = S.endDate;
   S.edited = true; buildDays(); refreshAll(false);
@@ -1795,6 +1841,7 @@ function toTray(k) {
 }
 function dropFromTray(k2, j) {
   j = j === undefined ? dragTray : j; dragTray = -1;
+  if (j === 'all') { if (isLocked(k2)) return msg('고정 칸에는 놓을 수 없습니다.'); const all = (S.tray || []).splice(0); return moveInsert([], k2, '', all); }
   const it = (S.tray || [])[j]; if (!it) return;
   if (isLocked(k2)) return msg('고정 칸에는 놓을 수 없습니다.');
   S.tray.splice(j, 1);
@@ -1807,17 +1854,17 @@ function renderTray() {
   const el = $('#tray'); if (!el) return;
   const T = S.tray || [];
   const nSel = (S.selK || new Set()).size;
-  el.innerHTML = `${nSel ? `<div class="selbar"><b>${nSel}칸 선택됨</b> — 옮길 자리에 끌어다 놓거나, 그 칸에서 오른쪽 클릭 → [여기 앞에 끼워 넣기] <button type="button" class="obtn" id="selEnd">맨 뒤로 보내기</button> <button type="button" class="obtn" id="selTray">보관함에 넣기</button> <button type="button" class="obtn" id="selClear">선택 해제</button></div>` : ''}<b>보관함</b> <small>Ctrl+클릭으로 여러 칸, Shift+클릭으로 범위를 고른 뒤 원하는 주의 칸에 끌어다 놓으면 그 자리에 끼워 넣고 앞뒤를 당깁니다 · 칸 오른쪽 클릭 → [맨 뒤로 보내기]</small>
-    <div class="trayItems">${T.length ? T.map((it, j) => { const s = S.subjects[it.i]; return `<span class="chip" draggable="true" data-j="${j}" style="background:${s.color}" title="${esc(s.name)} / ${esc(it.t)} / 원래 ${fmtK(it.from.split('|')[0])} ${it.from.split('|')[1]}교시">${esc(s.name)} <small>${esc(tShort(it.t))} · ${fmtK(it.from.split('|')[0])}</small></span>`; }).join('') : '<span class="trayEmpty">비어 있음 — 여기로 끌어다 놓기</span>'}</div>`;
+  el.innerHTML = `${nSel ? `<div class="selbar"><b>✓ ${nSel}칸 선택됨</b> <span class="selwhere">${selSummary()}</span><br>옮길 자리에서 오른쪽 클릭 → [여기 앞에 끼워 넣기] <button type="button" class="obtn" id="selGo">처음 칸으로 가기</button> <button type="button" class="obtn" id="selEnd">맨 뒤로 보내기</button> <button type="button" class="obtn" id="selTray">보관함에 넣기</button> <button type="button" class="obtn" id="selClear">선택 해제</button></div>` : ''}<b>보관함</b> <small>Ctrl+클릭으로 여러 칸, Shift+클릭으로 범위를 고른 뒤 원하는 주의 칸에 끌어다 놓으면 그 자리에 끼워 넣고 앞뒤를 당깁니다 · 칸 오른쪽 클릭 → [맨 뒤로 보내기]</small>
+    <div class="trayItems">${T.length > 1 ? `<span class="chip all" draggable="true" data-j="all" title="보관함 전체를 끌어다 놓으면 그 자리 앞에 차례로 끼워 넣습니다">▣ 모두 ${T.length}시간</span>` : ''}${T.length ? T.map((it, j) => { const s = S.subjects[it.i]; return `<span class="chip" draggable="true" data-j="${j}" style="background:${s.color}" title="${esc(s.name)} / ${esc(it.t)} / 원래 ${fmtK(it.from.split('|')[0])} ${it.from.split('|')[1]}교시">${esc(s.name)} <small>${esc(tShort(it.t))} · ${fmtK(it.from.split('|')[0])}</small></span>`; }).join('') : '<span class="trayEmpty">비어 있음 — 여기로 끌어다 놓기</span>'}</div>`;
   el.classList.toggle('has', T.length > 0);
   if (nSel) { $('#selEnd').onclick = () => sendToEnd([...S.selK]); $('#selClear').onclick = () => { S.selK = new Set(); refreshAll(false); };
-    $('#selTray').onclick = () => { [...S.selK].sort(keyCmp).forEach(k => { const it = takeCell(k); if (it) (S.tray = S.tray || []).push(it); }); S.selK = new Set(); afterFarMove(); }; }
+    $('#selTray').onclick = selToTray; $('#selGo').onclick = goFirstSel; }
   el.ondragover = e => { e.preventDefault(); el.classList.add('over'); };
   el.ondragleave = () => el.classList.remove('over');
   el.ondrop = e => { e.preventDefault(); el.classList.remove('over'); if (!dragK) return;
     if (dragGroup) { [...S.selK].sort(keyCmp).forEach(k => { const it = takeCell(k); if (it) (S.tray = S.tray || []).push(it); }); S.selK = new Set(); dragK = null; dragGroup = false; return afterFarMove(); }
     const k = dragK; dragK = null; toTray(k); };
-  $$('#tray .chip').forEach(c => { c.ondragstart = e => { dragTray = +c.dataset.j; dragK = null; e.dataTransfer.effectAllowed = 'move'; }; c.ondragend = () => setTimeout(() => { dragTray = -1; }, 0); });
+  $$('#tray .chip').forEach(c => { c.ondragstart = e => { dragTray = c.dataset.j === 'all' ? 'all' : +c.dataset.j; dragK = null; e.dataTransfer.effectAllowed = 'move'; }; c.ondragend = () => setTimeout(() => { dragTray = -1; }, 0); });
 }
 // 칸 오른쪽 클릭 메뉴
 function cellMenu(td, e) {
@@ -1826,8 +1873,9 @@ function cellMenu(td, e) {
   const items = [];
   const nSel = (S.selK || new Set()).size;
   if (nSel && !S.selK.has(k)) items.push(['ins', `선택한 ${nSel}칸을 여기 앞에 끼워 넣기 (앞뒤 당김)`]);
-  if (nSel) { items.push(['selend', `선택한 ${nSel}칸 맨 뒤로 보내기`]); items.push(['selclear', '선택 해제']); }
-  if (has) { items.push(['end', '이 칸 맨 뒤로 보내기 (빈 자리는 당겨 채움)']); items.push(['tray', '보관함에 넣기']); items.push(['teacher', '이 칸 교사 바꾸기']); }
+  if (T.length > 1) items.push(['putall', `보관함 ${T.length}시간 모두 여기 앞에 끼워 넣기 (앞뒤 당김)`]);
+  if (nSel) { items.push(['seltray', `선택한 ${nSel}칸 보관함에 넣기`]); items.push(['selend', `선택한 ${nSel}칸 맨 뒤로 보내기`]); items.push(['selclear', '선택 해제']); }
+  if (has) { items.push(['end', '이 칸 맨 뒤로 보내기 (빈 자리는 당겨 채움)']); if (!nSel) items.push(['tray', '이 칸 보관함에 넣기']); items.push(['teacher', '이 칸 교사 바꾸기']); }
   T.forEach((it, j) => items.push(['put' + j, `보관함에서 놓기: ${S.subjects[it.i].name} (${tShort(it.t)})`]));
   if (!items.length) return;
   const m = document.createElement('div'); m.id = 'cellMenu';
@@ -1835,7 +1883,7 @@ function cellMenu(td, e) {
   m.style.left = e.clientX + 'px'; m.style.top = e.clientY + 'px'; document.body.appendChild(m);
   m.onclick = ev => { const a = ev.target.closest('button')?.dataset.a; closeMenu(); if (!a) return;
     if (a === 'end') sendToEnd(k); else if (a === 'tray') toTray(k);
-    else if (a === 'ins') moveInsert([...S.selK], k); else if (a === 'selend') sendToEnd([...S.selK]); else if (a === 'selclear') { S.selK = new Set(); refreshAll(false); }
+    else if (a === 'ins') moveInsert([...S.selK], k); else if (a === 'putall') dropFromTray(k, 'all'); else if (a === 'seltray') selToTray(); else if (a === 'selend') sendToEnd([...S.selK]); else if (a === 'selclear') { S.selK = new Set(); refreshAll(false); }
     else if (a === 'teacher') td.dispatchEvent(new MouseEvent('dblclick'));
     else if (a.startsWith('put')) dropFromTray(k, +a.slice(3)); };
   setTimeout(() => document.addEventListener('click', closeMenu, { once: true }), 0);
@@ -1845,6 +1893,7 @@ const closeMenu = () => { const m = $('#cellMenu'); if (m) m.remove(); };
 /* ---------- 미리보기: 칸 고정 모드 ---------- */
 S.lockMode = false;
 function toggleLockMode() {
+  if (!S.lockMode && S.selMode) { S.selMode = false; document.body.classList.remove('selmode'); $('#btnSelMode').classList.remove('on'); }
   S.lockMode = !S.lockMode;
   $('#btnLockMode').classList.toggle('on', S.lockMode);
   $('#btnLockMode').textContent = S.lockMode ? '칸 고정하기: 켜짐 (칸을 누르면 고정/풀기)' : '칸 고정하기';
@@ -1862,6 +1911,7 @@ function bindExtra() {
   $('#fRef').addEventListener('change', e => { onRefFiles([...e.target.files]); e.target.value = ''; });
   $('#fRefDir').addEventListener('change', e => { onRefFiles([...e.target.files].filter(f => /\.(json|xlsx)$/i.test(f.name) && !/^~\$/.test(f.name))); e.target.value = ''; });
   $('#btnLockMode').onclick = toggleLockMode;
+  $('#btnSelMode').onclick = toggleSelMode; bindSelPaint();
   // 보관함에 수업이 남아 있으면 내려받기 전에 확인
   document.addEventListener('click', e => {
     const b = e.target.closest && e.target.closest('#btnElec, #btnPrint, #btnEval'); const n = (S.tray || []).length;

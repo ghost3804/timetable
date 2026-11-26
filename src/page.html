@@ -139,7 +139,11 @@ td.slot.extra{background:repeating-linear-gradient(135deg,#fff,#fff 6px,#f0f0f0 
 /* 미리보기 */
 table.week caption{color:#000;font-weight:700}td.pc{background:#f7f7f7}
 td.pc em{color:var(--acc-t);border-color:var(--acc-t);border-radius:2px}
-td.slot.over,td.slot.sel{outline:3px solid var(--acc);outline-offset:-3px}td.slot.sel{filter:brightness(.93)}
+td.slot.over{outline:3px solid var(--acc);outline-offset:-3px}
+td.slot{position:relative}td.slot.sel{outline:3px solid #000;outline-offset:-3px;filter:saturate(1.6) brightness(.85);font-weight:700}
+td.slot.sel::before{content:"✓";position:absolute;top:2px;left:3px;background:#000;color:var(--acc);font-size:11px;line-height:1;padding:2px 4px;border-radius:2px}
+body.selmode td.slot:not(.empty):not(.locked){cursor:cell}body.selmode #preview{outline:2px dashed #000;outline-offset:4px;user-select:none}body.selmode table.week th[data-d]{cursor:pointer}body.selmode table.week th[data-d]:hover{background:#f4fae8}
+.selwhere{color:#3f3f3f}.trayItems .chip.all{background:#000;color:#fff;border-color:#000;font-weight:700}
 .selbar{background:#f4fae8;border:1px solid var(--acc);border-radius:2px}
 #tray{background:#fff;border:1px dashed #a7a7a7;border-radius:2px}#tray.has{border:1px solid var(--warn);background:#fff6f6}#tray.over{outline:3px solid var(--acc)}
 .trayItems .chip{border-radius:2px;border-color:#5e5e5e}
@@ -223,7 +227,7 @@ a{color:#0046a4}
   <h2><span class="step">3</span>미리보기 · 수정 · 내려받기</h2>
   <div id="summary"></div>
   <div class="layout">
-    <div><div class="ptools"><button type="button" class="bbtn" id="btnLockMode">칸 고정하기</button> <button type="button" class="bbtn" id="btnFixExport">고정 칸을 양식으로 내보내기</button> <button type="button" class="bbtn" id="btnOverview" title="10개월 과정도 한눈에: 과목별 기간 막대와 평가일">전체 보기 ▾</button> <span class="dropmode">끌어 놓기: <label><input type="radio" name="dropmode" value="swap" checked> 바꾸기</label> <label><input type="radio" name="dropmode" id="dropInsert" value="insert"> 끼워 넣기·당기기</label></span> <span class="lg"><span class="lk">고정</span> 고정 칸 · <span class="sb">대체</span> 자동 대체 · <span class="clashlg">빨간 테두리</span> 기준 시간표와 겹침 · <span class="unreglg">주황 테두리</span> 등록 외 교사</span></div><div id="overview" hidden></div><p class="hint" style="margin:0 0 8px">칸을 끌어서 다른 칸에 놓으면 두 칸이 서로 바뀝니다(빈 칸으로도 옮길 수 있어요). <b>끼워 넣기·당기기</b>를 고르거나 <b>여러 칸</b>(Ctrl+클릭·Shift+클릭)을 끌면, 놓은 자리 앞에 끼워 넣고 뒤 수업은 밀고 빈 자리는 당겨 채웁니다(고정 칸은 그대로). 과목별 총시간은 그대로 유지됩니다. 칸을 <b>두 번 클릭</b>하면 그 칸의 교사만 바꿀 수 있어요. 멀리 옮길 때는 칸에서 <b>오른쪽 클릭</b> → [맨 뒤로 보내기] 또는 [보관함에 넣기]를 쓰세요.</p><div id="tray"></div>
+    <div><div class="ptools"><button type="button" class="bbtn" id="btnSelMode" title="누르거나 마우스로 훑어서 여러 칸 고르기, 날짜 머리를 누르면 그날 전체">여러 칸 고르기</button> <button type="button" class="bbtn" id="btnLockMode">칸 고정하기</button> <button type="button" class="bbtn" id="btnFixExport">고정 칸을 양식으로 내보내기</button> <button type="button" class="bbtn" id="btnOverview" title="10개월 과정도 한눈에: 과목별 기간 막대와 평가일">전체 보기 ▾</button> <span class="dropmode">끌어 놓기: <label><input type="radio" name="dropmode" value="swap" checked> 바꾸기</label> <label><input type="radio" name="dropmode" id="dropInsert" value="insert"> 끼워 넣기·당기기</label></span> <span class="lg"><span class="lk">고정</span> 고정 칸 · <span class="sb">대체</span> 자동 대체 · <span class="clashlg">빨간 테두리</span> 기준 시간표와 겹침 · <span class="unreglg">주황 테두리</span> 등록 외 교사</span></div><div id="overview" hidden></div><p class="hint" style="margin:0 0 8px">칸을 끌어서 다른 칸에 놓으면 두 칸이 서로 바뀝니다(빈 칸으로도 옮길 수 있어요). <b>끼워 넣기·당기기</b>를 고르거나 <b>여러 칸</b>(Ctrl+클릭·Shift+클릭)을 끌면, 놓은 자리 앞에 끼워 넣고 뒤 수업은 밀고 빈 자리는 당겨 채웁니다(고정 칸은 그대로). 과목별 총시간은 그대로 유지됩니다. 칸을 <b>두 번 클릭</b>하면 그 칸의 교사만 바꿀 수 있어요. 멀리 옮길 때는 칸에서 <b>오른쪽 클릭</b> → [맨 뒤로 보내기] 또는 [보관함에 넣기]를 쓰세요.</p><div id="tray"></div>
   <div id="preview"></div></div>
     <div class="side">
       <section><h2>과목별 시간</h2><table id="totals"></table></section>

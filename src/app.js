@@ -447,7 +447,7 @@ function renderPreview() {
     return (nl ? ` · 고정 <b>${nl}칸</b>` : '') + (nTray ? ` · <b class="bad">보관함에 ${nTray}시간</b>` : '') + (S.ref && S.ref.length ? ` · 기준 시간표 ${S.ref.length}개와 겹침 <b class="${nc ? 'bad' : ''}">${nc}칸</b>` : ''); })()}`;
   $('#preview').innerHTML = weeks.map((w, wi) => {
     const s0 = parseD(S.settings.start);
-    const head = w.map(d => `<th class="${S.holidays[dkey(d)] ? 'hol' : ''}${d < s0 ? ' pre' : ''}">${d.getMonth() + 1}/${d.getDate()}(${WD[d.getDay()]})${S.holidays[dkey(d)] ? '<br><small>' + esc(S.holidays[dkey(d)]) + '</small>' : ''}</th>`).join('');
+    const head = w.map(d => `<th data-d="${dkey(d)}" class="${S.holidays[dkey(d)] ? 'hol' : ''}${d < s0 ? ' pre' : ''}">${d.getMonth() + 1}/${d.getDate()}(${WD[d.getDay()]})${S.holidays[dkey(d)] ? '<br><small>' + esc(S.holidays[dkey(d)]) + '</small>' : ''}</th>`).join('');
     const ps = [...new Set([...usedPeriods(), ...extraPeriods()])].sort((a, b) => a - b), showLunch = ps[0] <= T.lunchAfter && ps[ps.length - 1] > T.lunchAfter;
     const ex = extraPeriods();
     const body = T.rows.filter(r => r.p === '점심' ? showLunch : ps.includes(r.p)).map(r => {
@@ -460,7 +460,7 @@ function renderPreview() {
         const t = lessonT(k), sp = splitOf(s), tj = sp.findIndex(x => x.t === t), R = lessonR(k), rm = R !== $('#room').value ? `<br><small class="rm">${esc(roomShort(R))}</small>` : '';
         const lk = isLocked(k), cl = lessonClash(k), un = isUnreg(s, t), sb = !!(S.subst && S.subst[k]);
         const tip = `${s.name} / ${t} / ${R}${lk ? '\n[고정 칸] 드래그로 움직이지 않습니다' : ''}${un ? '\n[등록 외 교사] 운영계획서에 이 과목 교사로 등록되지 않음' : ''}${sb ? '\n[대체] 기준 시간표와 겹쳐 다른 교사로 자동 대체됨' : ''}${cl.length ? '\n⚠ 겹침: ' + cl.map(c => c.kind + ' — ' + c.label).join('\n   ') : ''}\n(두 번 클릭하면 이 칸 교사 바꾸기)`;
-        return `<td class="slot${lk ? ' locked' : ''}${cl.length ? ' clash' : ''}${un ? ' unreg' : ''}${S.selK && S.selK.has(k) ? ' sel' : ''}" data-k="${k}" draggable="${!lk}" style="background:${s.color}" title="${esc(tip)}">${lk ? '<span class="lk">고정</span>' : ''}${sb ? '<span class="sb">대체</span>' : ''}${esc(s.name)}<br><small class="${sp.length > 1 ? 'tm t' + Math.max(0, tj) : ''}">${esc(tShort(t))}</small>${rm}</td>`;
+        return `<td class="slot${lk ? ' locked' : ''}${cl.length ? ' clash' : ''}${un ? ' unreg' : ''}${S.selK && S.selK.has(k) ? ' sel' : ''}" data-k="${k}" draggable="${!lk && !S.selMode}" style="background:${s.color}" title="${esc(tip)}">${lk ? '<span class="lk">고정</span>' : ''}${sb ? '<span class="sb">대체</span>' : ''}${esc(s.name)}<br><small class="${sp.length > 1 ? 'tm t' + Math.max(0, tj) : ''}">${esc(tShort(t))}</small>${rm}</td>`;
       }).join('')}</tr>`;
     }).join('');
     const ws = [...new Set(w.map(wOf))], cap = weekendOnly ? `${ws[0] + 1}${ws.length > 1 ? '~' + (ws[ws.length - 1] + 1) : ''}주차 <small>(${w[0].getMonth() + 1}/${w[0].getDate()} ~ ${w[w.length - 1].getMonth() + 1}/${w[w.length - 1].getDate()})</small>` : `${wi + 1}주차`;
@@ -503,6 +503,7 @@ function bindDrag() {
     td.addEventListener('contextmenu', e => { if (typeof cellMenu === 'function') { e.preventDefault(); cellMenu(td, e); } });
     // 두 번 클릭: 이 칸만 교사 바꾸기 (그 과목 담당 교사 → 다른 교사 순)
     td.addEventListener('dblclick', () => {
+      if (S.selMode) return;
       const k = td.dataset.k, v = S.lessons[k]; if (v === undefined) return;
       const s = S.subjects[v], cur = lessonT(k);
       const all = [...new Set([cur, ...regT(s), ...splitOf(s).map(x => x.t), ...(allowOut() ? allTeachers() : [])])].filter(Boolean);
