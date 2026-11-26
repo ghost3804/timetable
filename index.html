@@ -140,9 +140,9 @@ td.slot.extra{background:repeating-linear-gradient(135deg,#fff,#fff 6px,#f0f0f0 
 table.week caption{color:#000;font-weight:700}td.pc{background:#f7f7f7}
 td.pc em{color:var(--acc-t);border-color:var(--acc-t);border-radius:2px}
 td.slot.over{outline:3px solid var(--acc);outline-offset:-3px}
-td.slot{position:relative}td.slot.sel{outline:3px solid #000;outline-offset:-3px;filter:saturate(1.6) brightness(.85);font-weight:700}
-td.slot.sel::before{content:"✓";position:absolute;top:2px;left:3px;background:#000;color:var(--acc);font-size:11px;line-height:1;padding:2px 4px;border-radius:2px}
-body.selmode td.slot:not(.empty):not(.locked){cursor:cell}body.selmode #preview{outline:2px dashed #000;outline-offset:4px;user-select:none}body.selmode table.week th[data-d]{cursor:pointer}body.selmode table.week th[data-d]:hover{background:#f4fae8}
+td.slot{position:relative}td.slot.sel{outline:3px solid var(--acc);outline-offset:-3px;filter:brightness(.93)}
+td.slot.sel::before{content:"✓";position:absolute;top:2px;left:3px;background:var(--acc);color:#fff;font-size:11px;font-weight:700;line-height:1;padding:2px 4px;border-radius:2px}
+body.selmode td.slot:not(.empty):not(.locked){cursor:cell}body.selmode #preview{outline:2px dashed var(--acc);outline-offset:4px;user-select:none}body.selmode table.week th[data-d]{cursor:pointer}body.selmode table.week th[data-d]:hover{background:#f4fae8}
 .selwhere{color:#3f3f3f}.trayItems .chip.all{background:#000;color:#fff;border-color:#000;font-weight:700}
 .selbar{background:#f4fae8;border:1px solid var(--acc);border-radius:2px}
 #tray{background:#fff;border:1px dashed #a7a7a7;border-radius:2px}#tray.has{border:1px solid var(--warn);background:#fff6f6}#tray.over{outline:3px solid var(--acc)}
@@ -1748,7 +1748,8 @@ function moveInsert(keys, target, label, extra) {
   const sel = [...new Set(keys)].filter(k => S.lessons[k] !== undefined && !isLocked(k)).sort(keyCmp);
   if (!sel.length && !extra.length) return;
   if (sel.includes(target)) return msg('고른 칸 안에는 끼워 넣을 수 없습니다. 고른 칸 바깥의 칸에 놓아 주세요.');
-  const from = [target, ...sel].sort(keyCmp)[0];
+  // 보관함에서 가져온 수업은 원래 빠졌던 자리도 포함해 앞에서부터 다시 채움(빈 자리는 당겨지고, 놓은 자리에 끼워 넣음)
+  const from = [target, ...sel, ...extra.map(x => x.from).filter(Boolean)].sort(keyCmp)[0];
   const aff = lessonKeysSorted().filter(k => keyCmp(k, from) >= 0 && !isLocked(k));
   const selSet = new Set(sel), rest = aff.filter(k => !selSet.has(k));
   const idx = rest.filter(k => keyCmp(k, target) < 0).length;

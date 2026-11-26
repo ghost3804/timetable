@@ -660,7 +660,8 @@ function moveInsert(keys, target, label, extra) {
   const sel = [...new Set(keys)].filter(k => S.lessons[k] !== undefined && !isLocked(k)).sort(keyCmp);
   if (!sel.length && !extra.length) return;
   if (sel.includes(target)) return msg('고른 칸 안에는 끼워 넣을 수 없습니다. 고른 칸 바깥의 칸에 놓아 주세요.');
-  const from = [target, ...sel].sort(keyCmp)[0];
+  // 보관함에서 가져온 수업은 원래 빠졌던 자리도 포함해 앞에서부터 다시 채움(빈 자리는 당겨지고, 놓은 자리에 끼워 넣음)
+  const from = [target, ...sel, ...extra.map(x => x.from).filter(Boolean)].sort(keyCmp)[0];
   const aff = lessonKeysSorted().filter(k => keyCmp(k, from) >= 0 && !isLocked(k));
   const selSet = new Set(sel), rest = aff.filter(k => !selSet.has(k));
   const idx = rest.filter(k => keyCmp(k, target) < 0).length;
