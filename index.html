@@ -196,7 +196,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   <div class="drops">
     <div class="dz req" id="dzPlan"><em class="tag">필수</em><b>HRD운영계획서 (.xls / .xlsx)</b><span id="planName">여기에 끌어 놓거나 눌러서 고르세요</span></div>
     <div class="dz req" id="dzCodes"><em class="tag">필수</em><b>코드표 (.xlsx)</b><span id="codeName">여기에 끌어 놓거나 눌러서 고르세요</span></div>
-    <div class="dz opt" id="dzLoad" onclick="document.getElementById('btnLoad').click()"><em class="tag">선택</em><b>이어서 수정하기</b><span>④ '편성 저장'으로 받은 .json 파일<br>(처음 편성할 때는 필요 없어요)</span></div>
+    <div class="dz opt" id="dzLoad"><em class="tag">선택</em><b>이어서 수정하기</b><span>④ '편성 저장'으로 받은 .json 파일<br>(처음 편성할 때는 필요 없어요)</span></div>
     <div class="dz opt elec" id="dzElec"><em class="tag">선택</em><b>전자시간표 불러와서 수정</b><span id="elecName">이미 만든 전자시간표 .xlsx<br>(코드표를 먼저 넣으면 이름으로 보여요)</span></div>
   </div>
   <p class="hint">필수: HRD운영계획서·코드표 · 선택: 이어서 수정하기(.json), 전자시간표 불러오기. 전자시간표만 넣어도 미리보기·드래그 수정·①②③ 내려받기가 됩니다. HRD운영계획서를 함께 넣으면 교과목 구분·NCS 능력단위·평가방법(재량교과 제외)까지 그대로 맞춰집니다.</p>
@@ -1062,7 +1062,7 @@ window.addEventListener('DOMContentLoaded', () => {
   S.cmap = loadCmap();
   bindDrop($('#dzPlan'), $('#fPlan'), onPlan);
   bindDrop($('#dzCodes'), $('#fCodes'), onCodes);
-  $('#fJson').addEventListener('change', e => e.target.files[0] && loadJson(e.target.files[0]));
+  bindDrop($('#dzLoad'), $('#fJson'), f => { if (!/\.json$/i.test(f.name)) return msg("이어서 수정하기에는 '편성 저장'으로 받은 .json 파일을 넣어 주세요."); loadJson(f).catch(er => msg('편성 저장 파일을 읽지 못했습니다: ' + er.message)); $('#fJson').value = ''; });
   $('#btnGen').onclick = () => { if (S.edited && !confirmBox()) return; S.edited = false; generate(); };
   $('#mode').onchange = toggleMode;
   $('#room').onfocus = () => { $('#room').dataset.old = $('#room').value; };

@@ -782,7 +782,7 @@ window.addEventListener('DOMContentLoaded', () => {
   S.cmap = loadCmap();
   bindDrop($('#dzPlan'), $('#fPlan'), onPlan);
   bindDrop($('#dzCodes'), $('#fCodes'), onCodes);
-  $('#fJson').addEventListener('change', e => e.target.files[0] && loadJson(e.target.files[0]));
+  bindDrop($('#dzLoad'), $('#fJson'), f => { if (!/\.json$/i.test(f.name)) return msg("이어서 수정하기에는 '편성 저장'으로 받은 .json 파일을 넣어 주세요."); loadJson(f).catch(er => msg('편성 저장 파일을 읽지 못했습니다: ' + er.message)); $('#fJson').value = ''; });
   $('#btnGen').onclick = () => { if (S.edited && !confirmBox()) return; S.edited = false; generate(); };
   $('#mode').onchange = toggleMode;
   $('#room').onfocus = () => { $('#room').dataset.old = $('#room').value; };
