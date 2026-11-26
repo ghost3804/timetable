@@ -232,7 +232,7 @@ function renderRefInfo() {
 
 /* ---------- 편성 (고정일정 → 순서대로, 기준 시간표 피하기) ---------- */
 function generate() {
-  const st = settings(); S.fromElec = false; S.tray = [];
+  const st = settings(); S.fromElec = false; S.tray = []; S.selK = new Set();
   if (!S.plan) return msg('운영계획서를 먼저 넣어 주세요.');
   if (!st.start) return msg('개강일을 입력해 주세요.');
   if (!st.periods.length) return msg('수업 교시를 하나 이상 골라 주세요.');
@@ -643,13 +643,62 @@ function slotAfterLast() {
   }
   return null;
 }
-function sendToEnd(k) {
-  if (isLocked(k)) return msg('고정 칸은 옮길 수 없습니다. [칸 고정하기]로 먼저 풀어 주세요.');
-  const it = takeCell(k); if (!it) return;
-  const k2 = slotAfterLast(); if (!k2) { putCell(k, it); return msg('뒤쪽에 넣을 빈칸을 찾지 못했습니다.'); }
-  putCell(k2, it); afterFarMove();
-  msg(`${S.subjects[it.i].name} 1시간: ${fmtK(k.split('|')[0])} ${k.split('|')[1]}교시 → <b>${fmtK(k2.split('|')[0])} ${k2.split('|')[1]}교시</b>(맨 뒤)로 보냈습니다. 원래 칸은 비어 있습니다.`);
-  setTimeout(() => { const td = $(`#preview td[data-k="${k2}"]`); if (td) { td.scrollIntoView({ behavior: 'smooth', block: 'center' }); td.classList.add('flashcell'); setTimeout(() => td.classList.remove('flashcell'), 1600); } }, 50);
+// 맨 뒤로 보내기: 고른 칸(들)을 마지막 수업 뒤로 보내고, 빈 자리는 뒤 수업이 당겨 채움
+function sendToEnd(keys) {
+  keys = (Array.isArray(keys) ? keys : [keys]).filter(k => S.lessons[k] !== undefined && !isLocked(k));
+  if (!keys.length) return msg('옮길 수 있는 칸이 없습니다(고정 칸은 [칸 고정하기]로 먼저 풀어 주세요).');
+  const end = slotAfterLast(); if (!end) return msg('뒤쪽에 넣을 빈칸을 찾지 못했습니다.');
+  moveInsert(keys, end, '맨 뒤로');
+}
+/* ---------- 끼워 넣기·당기기 ----------
+   고정 칸이 아닌 수업을 시간 순서의 한 줄로 보고, 고른 칸을 빼서 놓은 자리 앞에 끼워 넣은 뒤
+   (뺀 자리와 놓은 자리 중 앞쪽)부터 정규 교시 칸에 차례로 다시 채움 → 빈 자리는 당겨지고 뒤는 밀림. 고정 칸은 그대로 건너뜀 */
+const keyCmp = (a, b) => { const [da, pa] = a.split('|'), [db, pb] = b.split('|'); return da === db ? +pa - +pb : da < db ? -1 : 1; };
+const insertMode = () => !!($('#dropInsert') && $('#dropInsert').checked);
+function moveInsert(keys, target, label, extra) {
+  const st = S.settings; extra = extra || [];
+  const sel = [...new Set(keys)].filter(k => S.lessons[k] !== undefined && !isLocked(k)).sort(keyCmp);
+  if (!sel.length && !extra.length) return;
+  if (sel.includes(target)) return msg('고른 칸 안에는 끼워 넣을 수 없습니다. 고른 칸 바깥의 칸에 놓아 주세요.');
+  const from = [target, ...sel].sort(keyCmp)[0];
+  const aff = lessonKeysSorted().filter(k => keyCmp(k, from) >= 0 && !isLocked(k));
+  const selSet = new Set(sel), rest = aff.filter(k => !selSet.has(k));
+  const idx = rest.filter(k => keyCmp(k, target) < 0).length;
+  const take = ks => ks.map(k => takeCell(k));
+  const restI = take(rest), movI = [...take(sel), ...extra];
+  const order = [...restI.slice(0, idx), ...movI, ...restI.slice(idx)];
+  // 다시 채울 칸: from 부터 수업 요일·공휴일 아닌 날의 정규 교시(고정 칸은 건너뜀). 모자라면 뒤로 날짜를 늘림
+  const ps = [...st.periods].sort((a, b) => a - b), [fd, fp] = from.split('|');
+  const fromP = ps.includes(+fp) ? +fp : (ps.find(p => p > +fp) || 99);
+  let n = 0, firstNew = null;
+  for (let i = 0, d = parseD(fd); n < order.length && i < 800; i++, d = addD(d, 1)) {
+    const dk = dkey(d); if (!st.weekdays.includes(d.getDay()) || S.holidays[dk]) continue;
+    for (const p of ps) {
+      if (n >= order.length) break;
+      if (dk === fd && p < fromP) continue;
+      const k = dk + '|' + p; if (S.lessons[k] !== undefined) continue;   // 고정 칸 등 남아 있는 칸은 건너뜀
+      if (order[n] === movI[0] && !firstNew) firstNew = k;
+      putCell(k, order[n++]);
+    }
+  }
+  S.selK = new Set(); recalcEnd(); S.rangeEnd = S.endDate; S.edited = true; buildDays(); refreshAll(false);
+  const nm = [...new Set(movI.map(x => S.subjects[x.i].name))].slice(0, 3).join(', ');
+  msg(`${nm} ${movI.length}시간을 ${firstNew ? fmtK(firstNew.split('|')[0]) + ' ' + firstNew.split('|')[1] + '교시' : ''}${label === '맨 뒤로' ? '(맨 뒤)' : ''}부터 끼워 넣고, 앞뒤 수업을 당겨 채웠습니다. 수료일 ${dkey(S.endDate)}${n < order.length ? ` · ⚠ ${order.length - n}시간은 넣을 칸을 못 찾아 보관함으로` : ''}`);
+  if (n < order.length) { (S.tray = S.tray || []).push(...order.slice(n)); refreshAll(false); }
+  if (firstNew) setTimeout(() => { const td = $(`#preview td[data-k="${firstNew}"]`); if (td) { td.scrollIntoView({ behavior: 'smooth', block: 'center' }); td.classList.add('flashcell'); setTimeout(() => td.classList.remove('flashcell'), 1600); } }, 60);
+}
+// Ctrl+클릭: 한 칸씩 고르기 / Shift+클릭: 앞서 누른 칸부터 이 칸까지 시간 순서대로 모두
+let selAnchor = null;
+function selectClick(k, e) {
+  if (S.lessons[k] === undefined || isLocked(k)) return;
+  S.selK = S.selK || new Set();
+  if (e.shiftKey && selAnchor) {
+    const [a, b] = [selAnchor, k].sort(keyCmp);
+    lessonKeysSorted().filter(x => keyCmp(x, a) >= 0 && keyCmp(x, b) <= 0 && !isLocked(x)).forEach(x => S.selK.add(x));
+  } else { if (S.selK.has(k)) S.selK.delete(k); else S.selK.add(k); selAnchor = k; }
+  window.getSelection && window.getSelection().removeAllRanges();
+  $$('#preview td.slot').forEach(td => td.classList.toggle('sel', S.selK.has(td.dataset.k)));
+  renderTray();
 }
 function afterFarMove() {
   recalcEnd(); if (!S.rangeEnd || S.endDate > S.rangeEnd) S.rangeEnd = S.endDate;
@@ -666,6 +715,7 @@ function dropFromTray(k2, j) {
   const it = (S.tray || [])[j]; if (!it) return;
   if (isLocked(k2)) return msg('고정 칸에는 놓을 수 없습니다.');
   S.tray.splice(j, 1);
+  if (insertMode()) return moveInsert([], k2, '', [it]);
   const old = takeCell(k2); if (old) S.tray.push(old);   // 수업이 있던 칸이면 그 수업은 보관함으로(서로 바꾸기)
   putCell(k2, it); afterFarMove();
   msg(`${S.subjects[it.i].name} 1시간을 ${fmtK(k2.split('|')[0])} ${k2.split('|')[1]}교시에 놓았습니다.${old ? ` 원래 있던 ${S.subjects[old.i].name}은 보관함으로 갔습니다.` : ''}`);
@@ -673,12 +723,17 @@ function dropFromTray(k2, j) {
 function renderTray() {
   const el = $('#tray'); if (!el) return;
   const T = S.tray || [];
-  el.innerHTML = `<b>보관함</b> <small>멀리 옮길 칸을 여기 끌어다 넣고, 옮길 주로 가서 다시 끌어다 놓으세요 · 칸에서 오른쪽 클릭 → [맨 뒤로 보내기]</small>
+  const nSel = (S.selK || new Set()).size;
+  el.innerHTML = `${nSel ? `<div class="selbar"><b>${nSel}칸 선택됨</b> — 옮길 자리에 끌어다 놓거나, 그 칸에서 오른쪽 클릭 → [여기 앞에 끼워 넣기] <button type="button" class="obtn" id="selEnd">맨 뒤로 보내기</button> <button type="button" class="obtn" id="selTray">보관함에 넣기</button> <button type="button" class="obtn" id="selClear">선택 해제</button></div>` : ''}<b>보관함</b> <small>Ctrl+클릭으로 여러 칸, Shift+클릭으로 범위를 고른 뒤 원하는 주의 칸에 끌어다 놓으면 그 자리에 끼워 넣고 앞뒤를 당깁니다 · 칸 오른쪽 클릭 → [맨 뒤로 보내기]</small>
     <div class="trayItems">${T.length ? T.map((it, j) => { const s = S.subjects[it.i]; return `<span class="chip" draggable="true" data-j="${j}" style="background:${s.color}" title="${esc(s.name)} / ${esc(it.t)} / 원래 ${fmtK(it.from.split('|')[0])} ${it.from.split('|')[1]}교시">${esc(s.name)} <small>${esc(tShort(it.t))} · ${fmtK(it.from.split('|')[0])}</small></span>`; }).join('') : '<span class="trayEmpty">비어 있음 — 여기로 끌어다 놓기</span>'}</div>`;
   el.classList.toggle('has', T.length > 0);
+  if (nSel) { $('#selEnd').onclick = () => sendToEnd([...S.selK]); $('#selClear').onclick = () => { S.selK = new Set(); refreshAll(false); };
+    $('#selTray').onclick = () => { [...S.selK].sort(keyCmp).forEach(k => { const it = takeCell(k); if (it) (S.tray = S.tray || []).push(it); }); S.selK = new Set(); afterFarMove(); }; }
   el.ondragover = e => { e.preventDefault(); el.classList.add('over'); };
   el.ondragleave = () => el.classList.remove('over');
-  el.ondrop = e => { e.preventDefault(); el.classList.remove('over'); if (dragK) { const k = dragK; dragK = null; toTray(k); } };
+  el.ondrop = e => { e.preventDefault(); el.classList.remove('over'); if (!dragK) return;
+    if (dragGroup) { [...S.selK].sort(keyCmp).forEach(k => { const it = takeCell(k); if (it) (S.tray = S.tray || []).push(it); }); S.selK = new Set(); dragK = null; dragGroup = false; return afterFarMove(); }
+    const k = dragK; dragK = null; toTray(k); };
   $$('#tray .chip').forEach(c => { c.ondragstart = e => { dragTray = +c.dataset.j; dragK = null; e.dataTransfer.effectAllowed = 'move'; }; c.ondragend = () => setTimeout(() => { dragTray = -1; }, 0); });
 }
 // 칸 오른쪽 클릭 메뉴
@@ -686,7 +741,10 @@ function cellMenu(td, e) {
   closeMenu();
   const k = td.dataset.k, has = S.lessons[k] !== undefined, T = S.tray || [];
   const items = [];
-  if (has) { items.push(['end', '맨 뒤로 보내기 (마지막 수업 다음 빈칸)']); items.push(['tray', '보관함에 넣기']); items.push(['teacher', '이 칸 교사 바꾸기']); }
+  const nSel = (S.selK || new Set()).size;
+  if (nSel && !S.selK.has(k)) items.push(['ins', `선택한 ${nSel}칸을 여기 앞에 끼워 넣기 (앞뒤 당김)`]);
+  if (nSel) { items.push(['selend', `선택한 ${nSel}칸 맨 뒤로 보내기`]); items.push(['selclear', '선택 해제']); }
+  if (has) { items.push(['end', '이 칸 맨 뒤로 보내기 (빈 자리는 당겨 채움)']); items.push(['tray', '보관함에 넣기']); items.push(['teacher', '이 칸 교사 바꾸기']); }
   T.forEach((it, j) => items.push(['put' + j, `보관함에서 놓기: ${S.subjects[it.i].name} (${tShort(it.t)})`]));
   if (!items.length) return;
   const m = document.createElement('div'); m.id = 'cellMenu';
@@ -694,6 +752,7 @@ function cellMenu(td, e) {
   m.style.left = e.clientX + 'px'; m.style.top = e.clientY + 'px'; document.body.appendChild(m);
   m.onclick = ev => { const a = ev.target.closest('button')?.dataset.a; closeMenu(); if (!a) return;
     if (a === 'end') sendToEnd(k); else if (a === 'tray') toTray(k);
+    else if (a === 'ins') moveInsert([...S.selK], k); else if (a === 'selend') sendToEnd([...S.selK]); else if (a === 'selclear') { S.selK = new Set(); refreshAll(false); }
     else if (a === 'teacher') td.dispatchEvent(new MouseEvent('dblclick'));
     else if (a.startsWith('put')) dropFromTray(k, +a.slice(3)); };
   setTimeout(() => document.addEventListener('click', closeMenu, { once: true }), 0);
@@ -725,7 +784,7 @@ function bindExtra() {
     const b = e.target.closest && e.target.closest('#btnElec, #btnPrint, #btnEval'); const n = (S.tray || []).length;
     if (b && n && !window.confirm(`보관함에 ${n}시간이 남아 있어, 그 시간이 빠진 채로 내려받습니다. 계속할까요?`)) { e.preventDefault(); e.stopPropagation(); }
   }, true);
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeMenu(); if (S.selK && S.selK.size) { S.selK = new Set(); refreshAll(false); } } });
   $('#btnRules').onclick = () => { const el = $('#rulePanel'); el.hidden = !el.hidden; $('#btnRules').classList.toggle('on', !el.hidden); renderRules(); };
   $('#ruleAdd').onclick = addRule;
   $('#ruleApply').onclick = reapplyRules;

@@ -460,7 +460,7 @@ function renderPreview() {
         const t = lessonT(k), sp = splitOf(s), tj = sp.findIndex(x => x.t === t), R = lessonR(k), rm = R !== $('#room').value ? `<br><small class="rm">${esc(roomShort(R))}</small>` : '';
         const lk = isLocked(k), cl = lessonClash(k), un = isUnreg(s, t), sb = !!(S.subst && S.subst[k]);
         const tip = `${s.name} / ${t} / ${R}${lk ? '\n[고정 칸] 드래그로 움직이지 않습니다' : ''}${un ? '\n[등록 외 교사] 운영계획서에 이 과목 교사로 등록되지 않음' : ''}${sb ? '\n[대체] 기준 시간표와 겹쳐 다른 교사로 자동 대체됨' : ''}${cl.length ? '\n⚠ 겹침: ' + cl.map(c => c.kind + ' — ' + c.label).join('\n   ') : ''}\n(두 번 클릭하면 이 칸 교사 바꾸기)`;
-        return `<td class="slot${lk ? ' locked' : ''}${cl.length ? ' clash' : ''}${un ? ' unreg' : ''}" data-k="${k}" draggable="${!lk}" style="background:${s.color}" title="${esc(tip)}">${lk ? '<span class="lk">고정</span>' : ''}${sb ? '<span class="sb">대체</span>' : ''}${esc(s.name)}<br><small class="${sp.length > 1 ? 'tm t' + Math.max(0, tj) : ''}">${esc(tShort(t))}</small>${rm}</td>`;
+        return `<td class="slot${lk ? ' locked' : ''}${cl.length ? ' clash' : ''}${un ? ' unreg' : ''}${S.selK && S.selK.has(k) ? ' sel' : ''}" data-k="${k}" draggable="${!lk}" style="background:${s.color}" title="${esc(tip)}">${lk ? '<span class="lk">고정</span>' : ''}${sb ? '<span class="sb">대체</span>' : ''}${esc(s.name)}<br><small class="${sp.length > 1 ? 'tm t' + Math.max(0, tj) : ''}">${esc(tShort(t))}</small>${rm}</td>`;
       }).join('')}</tr>`;
     }).join('');
     const ws = [...new Set(w.map(wOf))], cap = weekendOnly ? `${ws[0] + 1}${ws.length > 1 ? '~' + (ws[ws.length - 1] + 1) : ''}주차 <small>(${w[0].getMonth() + 1}/${w[0].getDate()} ~ ${w[w.length - 1].getMonth() + 1}/${w[w.length - 1].getDate()})</small>` : `${wi + 1}주차`;
@@ -468,14 +468,15 @@ function renderPreview() {
   }).join('');
   bindDrag(); if (typeof renderTray === 'function') renderTray();
 }
-let dragK = null;
+let dragK = null, dragGroup = false;
 function bindDrag() {
   $$('#preview td.slot').forEach(td => {
-    td.addEventListener('click', () => {
+    td.addEventListener('click', e => {
+      if (!S.lockMode && (e.ctrlKey || e.metaKey || e.shiftKey) && typeof selectClick === 'function') return selectClick(td.dataset.k, e);
       if (!S.lockMode) return; const k = td.dataset.k; if (S.lessons[k] === undefined) return;
       S.lock = S.lock || {}; if (S.lock[k]) delete S.lock[k]; else S.lock[k] = 1; S.edited = true; refreshAll(false);
     });
-    td.addEventListener('dragstart', e => { if (isLocked(td.dataset.k) || S.lockMode) { e.preventDefault(); return; } dragK = td.dataset.k; e.dataTransfer.effectAllowed = 'move'; td.classList.add('dragging'); });
+    td.addEventListener('dragstart', e => { if (isLocked(td.dataset.k) || S.lockMode) { e.preventDefault(); return; } dragK = td.dataset.k; dragGroup = !!(S.selK && S.selK.size > 1 && S.selK.has(dragK)); e.dataTransfer.effectAllowed = 'move'; td.classList.add('dragging'); });
     td.addEventListener('dragend', () => td.classList.remove('dragging'));
     td.addEventListener('dragover', e => { e.preventDefault(); td.classList.add('over'); });
     td.addEventListener('dragleave', () => td.classList.remove('over'));
@@ -485,6 +486,8 @@ function bindDrag() {
       if (typeof dragTray === 'number' && dragTray >= 0) return dropFromTray(k2);
       if (!dragK || dragK === k2) return;
       if (isLocked(k2)) { dragK = null; return msg('고정 칸에는 놓을 수 없습니다. [칸 고정하기]로 먼저 풀어 주세요.'); }
+      // 여러 칸을 끌었거나 '끼워 넣기·당기기' 방식이면: 놓은 자리 앞에 끼워 넣고 앞뒤 수업을 당겨 채움
+      if (dragGroup || insertMode()) { const ks = dragGroup ? [...S.selK] : [dragK]; dragK = null; dragGroup = false; return moveInsert(ks, k2); }
       S.lr = S.lr || {}; const ra = S.lr[dragK], rb = S.lr[k2];
       if (rb === undefined) delete S.lr[dragK]; else S.lr[dragK] = rb;
       if (ra === undefined) delete S.lr[k2]; else S.lr[k2] = ra;
