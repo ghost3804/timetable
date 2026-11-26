@@ -396,7 +396,7 @@ function setCmap(cat, name, val) {
 
 /* ---------- 전자시간표 불러와서 수정하기 ----------
    이미 만든(또는 HRD에 올린) 전자시간표 .xlsx → 미리보기 편집기로 되살림
-   - 점심 위치: 시간구분 '2' 행(11:50 → 3교시 뒤, 12:50 → 4교시 뒤) 또는 4교시 시작 시각으로 판단
+   - 점심 위치: 시간구분 '2' 행(12:00·11:50 → 3교시 뒤, 13:00·12:50 → 4교시 뒤) 또는 4교시 시작 시각으로 판단
    - 코드 → 이름: 코드표가 있으면 이름으로, 없으면 코드를 그대로 이름처럼 씀
    - 운영계획서가 이미 들어 있으면 교과목 코드로 그 과목에 맞춤(계획 시간·평가방법 유지) */
 const elecCourseName = fname => fname.replace(/\.xlsx?$/i, '').replace(/^전자시간표_?/, '').replace(/\s*\(\d{2}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2}\)\s*$/, '').trim() || '불러온 과정';
@@ -430,7 +430,7 @@ async function onElecImport(file, opt = {}) {
   // 점심 위치
   const lt0 = other.lunch.sort((a, b) => other.lunch.filter(x => x === b).length - other.lunch.filter(x => x === a).length)[0];
   const times = new Set(recs.map(x => x.tm));
-  const la = lt0 === '1150' ? 3 : lt0 === '1250' ? 4 : times.has('1240') ? 3 : 4;
+  const la = ['1150', '1200'].includes(lt0) ? 3 : ['1250', '1300'].includes(lt0) ? 4 : times.has('1240') ? 3 : 4;
   const T = periodTable(la), pOf = Object.fromEntries(Object.values(T.byP).map(x => [x.s, x.p]));
   // 코드표 (없으면 빈 표를 만들고 모르는 코드는 코드 그대로 등록 → 다시 내려받을 때 같은 코드가 나감)
   S.codes = S.codes || { teachers: {}, rooms: [], subjects: {}, subjList: [] };

@@ -57,7 +57,8 @@ function periodTable(lunchAfter) {
     { p: 1, s: '0900', disp: '09:00-09:50' }, { p: 2, s: '1000', disp: '10:00-10:50' }, { p: 3, s: '1100', disp: '11:00-11:50' },
     lunchAfter === 4 ? { p: 4, s: '1200', disp: '12:00-12:50' } : { p: 4, s: '1240', disp: '12:40-13:30' },
     { p: 5, s: '1340', disp: '13:40-14:30' }, { p: 6, s: '1440', disp: '14:40-15:30' }, { p: 7, s: '1540', disp: '15:40-16:30' }, { p: 8, s: '1640', disp: '16:40-17:30' }];
-  const lunch = lunchAfter === 4 ? { p: '점심', s: '1250', disp: '12:50-13:40' } : { p: '점심', s: '1150', disp: '11:50-12:40' };
+  // 교시는 50분 수업 + 10분 쉬는 시간 = 60분이므로 점심은 정시에 시작(3교시 뒤 12:00, 4교시 뒤 13:00)
+  const lunch = lunchAfter === 4 ? { p: '점심', s: '1300', disp: '13:00-13:40' } : { p: '점심', s: '1200', disp: '12:00-12:40' };
   const rows = [...base]; rows.splice(lunchAfter, 0, lunch);
   return { rows, lunch, lunchAfter, byP: Object.fromEntries(base.map(x => [x.p, x])) };
 }
