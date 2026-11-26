@@ -147,7 +147,7 @@ function placeFixed(st) {
     if (i < 0) { warn.push(`${x.date} '${x.subj}': 이 과정에 없는 교과목`); return; }
     const d = parseD(x.date);
     if (x.date < start) { warn.push(`${x.date} '${x.subj}': 개강일 전`); return; }
-    if (d.getDay() === 0 || d.getDay() === 6 || hol[x.date]) { warn.push(`${x.date} '${x.subj}': 주말·공휴일`); return; }
+    if (!st.weekdays.includes(d.getDay()) || hol[x.date]) { warn.push(`${x.date} '${x.subj}': 수업 요일이 아니거나 공휴일`); return; }
     const ps = fixedPeriods(x.time, st);
     if (!ps.length) { warn.push(`${x.date} '${x.subj}': 교시 '${x.time}'를 읽지 못함`); return; }
     const s = S.subjects[i];
@@ -557,7 +557,7 @@ function renderRules() {
     return [...new Set([...base, cur].filter(Boolean))].map(t => `<option${t === cur ? ' selected' : ''}>${esc(t)}</option>`).join(''); };
   body.innerHTML = R.length ? R.map((r, j) => `<tr>
     <td class="num">${j + 1}</td><td><select class="rS" data-j="${j}">${subjOpt(r.i)}</select></td>
-    <td class="chks">${[1, 2, 3, 4, 5].map(d => `<label><input type="checkbox" class="rD" data-j="${j}" value="${d}" ${(r.days || []).includes(d) ? 'checked' : ''}>${WD[d]}</label>`).join('')}</td>
+    <td class="chks">${[1, 2, 3, 4, 5, 6, 0].filter(d => d >= 1 && d <= 5 || (S.settings ? S.settings.weekdays : settings().weekdays).includes(d) || (r.days || []).includes(d)).map(d => `<label><input type="checkbox" class="rD" data-j="${j}" value="${d}" ${(r.days || []).includes(d) ? 'checked' : ''}>${WD[d]}</label>`).join('')}</td>
     <td><select class="rH" data-j="${j}">${[['all', '오전·오후'], ['am', '오전'], ['pm', '오후']].map(([v, n]) => `<option value="${v}"${r.h === v ? ' selected' : ''}>${n}</option>`).join('')}</select></td>
     <td><select class="rT" data-j="${j}">${tOpt(r.i, r.t)}</select>${r.i >= 0 && isUnreg(S.subjects[r.i], r.t) ? ' <span class="unregTag">등록 외</span>' : ''}</td>
     <td><button type="button" class="tDel" data-j="${j}" title="이 규칙 빼기">×</button> <button type="button" class="tAdd rUp" data-j="${j}" title="위로">▲</button></td></tr>`).join('')

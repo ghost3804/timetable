@@ -394,10 +394,21 @@ function settings() {
     mode: $('#mode').value, spill: $('#spill').checked, extra: $('#extra').checked
   };
 }
+// 화면·출력에 보일 요일: 평일을 하나라도 고르면 월~금 전부 + 고른 주말, 주말만 고르면(주말반) 그 주말만. 수업이 있는 날의 요일은 항상 포함
+const showDow = () => {
+  const w = (S.settings && S.settings.weekdays) || [1, 2, 3, 4, 5];
+  const set = new Set(w.some(x => x >= 1 && x <= 5) ? [1, 2, 3, 4, 5] : []);
+  w.forEach(x => set.add(x)); Object.keys(S.lessons || {}).forEach(k => set.add(parseD(k.split('|')[0]).getDay()));
+  if (!set.size) [1, 2, 3, 4, 5].forEach(x => set.add(x));
+  return set;
+};
+const dIdx = d => (d.getDay() + 6) % 7;                      // 월=0 … 일=6
+const monOf = d => addD(d, -dIdx(d));
+const weekEndOf = d => { const last = Math.max(...[...showDow()].map(x => (x + 6) % 7)); return addD(d, Math.max(0, last - dIdx(d))); };
 function buildDays() {
-  const st = S.settings; S.days = [];
-  const e0 = S.rangeEnd || S.endDate, e = addD(e0, Math.max(0, 5 - e0.getDay()));   // 마지막 주 금요일까지
-  for (let d = parseD(st.start); d <= e; d = addD(d, 1)) if (d.getDay() >= 1 && d.getDay() <= 5) S.days.push(new Date(d));
+  const st = S.settings; S.days = []; const sh = showDow();
+  const e = weekEndOf(S.rangeEnd || S.endDate);   // 마지막 주의 마지막 보이는 요일까지
+  for (let d = parseD(st.start); d <= e; d = addD(d, 1)) if (sh.has(d.getDay())) S.days.push(new Date(d));
 }
 function refreshAll(scroll) {
   if (!S.settings) return;
@@ -410,18 +421,18 @@ const extraPeriods = () => { const ps = S.settings.periods; if (S.settings.extra
 const isSlot = (d, p) => S.lessons[dkey(d) + '|' + p] !== undefined || d >= parseD(S.settings.start) && S.settings.weekdays.includes(d.getDay()) && !S.holidays[dkey(d)] && (S.settings.periods.includes(p) || extraPeriods().includes(p));
 const usedPeriods = () => { const set = new Set(S.settings.periods); Object.keys(S.lessons).forEach(k => set.add(+k.split('|')[1])); return [...set].sort((a, b) => a - b); };
 const outDays = () => S.days.filter(d => d <= S.endDate);
-// 출력용: 개강 주 월요일 ~ 수료 주 금요일의 모든 월~금
-const weekDays = () => { const s0 = parseD(S.settings.start), out = []; let d = addD(s0, -((s0.getDay() + 6) % 7)); const e = addD(S.endDate, 5 - S.endDate.getDay());
-  for (; d <= e; d = addD(d, 1)) if (d.getDay() >= 1 && d.getDay() <= 5) out.push(new Date(d)); return out; };
+// 출력용: 개강 주 월요일 ~ 수료 주 마지막 보이는 요일까지, 보이는 요일만(기본 월~금, 주말 고르면 토·일 포함)
+const weekDays = () => { const sh = showDow(), out = []; let d = monOf(parseD(S.settings.start)); const e = weekEndOf(S.endDate);
+  for (; d <= e; d = addD(d, 1)) if (sh.has(d.getDay())) out.push(new Date(d)); return out; };
 const teacherNames = () => { const set = new Set(); lessonKeysSorted().forEach(k => { const t = lessonT(k); if (t) set.add(t); }); return [...set]; };
 function recalcEnd() { const ks = Object.keys(S.lessons).map(k => k.split('|')[0]).sort(); if (ks.length) S.endDate = parseD(ks[ks.length - 1]); }
 
 function renderPreview() {
   const T = periodTable(S.settings.lunchAfter);
   const weeks = []; let cur = [];
-  // 주차 달력은 항상 월~금: 개강 주 월요일부터 채움
-  const pre = []; for (let d = addD(S.days[0], -((S.days[0].getDay() + 6) % 7)); d < S.days[0]; d = addD(d, 1)) pre.push(new Date(d));
-  [...pre, ...S.days].forEach(d => { if (cur.length && d.getDay() === 1) { weeks.push(cur); cur = []; } cur.push(d); });
+  // 주차 달력: 개강 주 월요일부터, 보이는 요일만(기본 월~금, 주말 고르면 토·일까지)
+  const sh = showDow(), pre = []; for (let d = monOf(S.days[0]); d < S.days[0]; d = addD(d, 1)) if (sh.has(d.getDay())) pre.push(new Date(d));
+  [...pre, ...S.days].forEach(d => { if (cur.length && dkey(monOf(d)) !== dkey(monOf(cur[0]))) { weeks.push(cur); cur = []; } cur.push(d); });
   if (cur.length) weeks.push(cur);
   const sDate = S.days[0], eDate = S.endDate;
   $('#summary').innerHTML = `훈련기간 <b>${dkey(sDate)} ~ ${dkey(eDate)}</b>${S.rangeEnd && S.endDate < S.rangeEnd ? ' <span class="bad">(옮긴 칸 때문에 수료일이 앞당겨짐)</span>' : ''} · 수업일 <b>${new Set(Object.keys(S.lessons).map(k => k.split('|')[0])).size}일</b> · 편성 <b>${Object.keys(S.lessons).length}시간</b>${(() => { const nl = Object.keys(S.lock || {}).filter(k => S.lock[k] && S.lessons[k] !== undefined).length, nc = (S.ref && S.ref.length) ? Object.keys(S.lessons).filter(k => lessonClash(k).length).length : 0;
@@ -651,7 +662,7 @@ async function dlPrint() {
     });
     ['B', 'C', 'L', 'M'].forEach(cl => merges.push(`${cl}${r}:${cl}${r + 8}`));
     r += 9;
-    if (d.getDay() === 5 && di < OD.length - 1) breaks.push(r - 1);
+    if (di < OD.length - 1 && dkey(monOf(OD[di + 1])) !== dkey(monOf(d))) breaks.push(r - 1);   // 주가 바뀌면 다음 장
   });
   const last = r - 1;
   const headMerges = [...sh.matchAll(/<mergeCell ref="([A-Z]+)(\d+):([A-Z]+)(\d+)"\/>/g)].filter(m => +m[4] <= 5).map(m => m[0]);
@@ -726,7 +737,9 @@ async function onPlan(f) {
   try { S.plan = parsePlan(await readRows(f)); }
   catch (e) { return msg('운영계획서를 읽지 못했습니다: ' + e.message); }
   if (!S.plan.subjects.length) return msg('운영계획서에서 교과목을 찾지 못했습니다. HRD 통합심사 운영계획서 파일인지 확인해 주세요.');
-  $('#planName').textContent = f.name; buildSubjects(); renderSetup(); S.settings = null; $('#result').hidden = true;
+  $('#planName').textContent = f.name; buildSubjects(); renderSetup();
+  const r0 = $('#room').value; if (r0) { S.subjects.forEach(s => { if (!s.room) s.room = r0; }); renderSetup(); }   // 처음엔 과정 기본 강의실로 채워 둠(과목별로 바꿀 수 있음)
+  S.settings = null; $('#result').hidden = true;
 }
 async function onCodes(f) {
   try { S.codes = parseCodes(await readRows(f)); } catch (e) { return msg('코드표를 읽지 못했습니다: ' + e.message); }
@@ -749,7 +762,10 @@ window.addEventListener('DOMContentLoaded', () => {
   $('#fJson').addEventListener('change', e => e.target.files[0] && loadJson(e.target.files[0]));
   $('#btnGen').onclick = () => { if (S.edited && !confirmBox()) return; S.edited = false; generate(); };
   $('#mode').onchange = toggleMode;
-  $('#room').onchange = () => { checkCodes(); if (S.settings) refreshAll(false); };
+  $('#room').onfocus = () => { $('#room').dataset.old = $('#room').value; };
+  $('#room').onchange = () => { const o = $('#room').dataset.old, n = $('#room').value;
+    if (o && o !== n) S.subjects.forEach(s => { if (s.room === o) s.room = n; });   // 기본 강의실 그대로 두었던 과목만 따라 바뀜
+    $('#room').dataset.old = n; renderSetup(); if (S.settings) refreshAll(false); };
   $('#btnElec').onclick = () => dlElec().catch(e => msg('오류: ' + e.message));
   $('#btnPrint').onclick = () => dlPrint().catch(e => msg('오류: ' + e.message));
   $('#btnEval').onclick = () => dlEval().catch(e => msg('오류: ' + e.message));
